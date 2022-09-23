@@ -2083,7 +2083,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						x1 = chartControl.GetXByBarIndex(ChartBars, i - 1);
 						x2 = chartControl.GetXByBarIndex(ChartBars, i);
 						x2 = (i == ChartBars.ToIndex) ? x2 + (barWidth / 2) : x2;
-						x2 = (showFootprint && footprintDisplayType == VPV2FootprintDisplayType.Numbers && footprintDeltaProfile) ? x2 + (cellWidth + 2) : x2;
+						x2 = (i == ChartBars.ToIndex && showFootprint && footprintDisplayType == VPV2FootprintDisplayType.Numbers && footprintDeltaProfile) ? x2 + (cellWidth + 2) : x2;
 						
 						if(i == ChartBars.ToIndex && custProfileMapExt)
 						{
@@ -3252,12 +3252,12 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							if(currBarItem.cdh < 0.0)
 							{
 								bidBrush.Opacity = 0.6f;
-								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y - textLayoutDta.Metrics.Height - tfNorm.FontSize * 0.7f), textLayoutDta, bidBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y - textLayoutDta.Metrics.Height - tfNorm.FontSize * 0.5f), textLayoutDta, bidBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							}
 							else
 							{
 								askBrush.Opacity = 0.6f;
-								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y - textLayoutDta.Metrics.Height - tfNorm.FontSize * 0.7f), textLayoutDta, askBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y - textLayoutDta.Metrics.Height - tfNorm.FontSize * 0.5f), textLayoutDta, askBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							}
 							
 							textLayoutDta.Dispose();
@@ -3269,12 +3269,12 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							if(currBarItem.cdl < 0.0)
 							{
 								bidBrush.Opacity = 0.6f;
-								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y + rect.Height + tfNorm.FontSize * 0.7f), textLayoutDta, bidBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y + rect.Height + tfNorm.FontSize * 0.5f), textLayoutDta, bidBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							}
 							else
 							{
 								askBrush.Opacity = 0.6f;
-								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y + rect.Height + tfNorm.FontSize * 0.7f), textLayoutDta, askBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y + rect.Height + tfNorm.FontSize * 0.5f), textLayoutDta, askBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							}
 							
 							textLayoutDta.Dispose();
@@ -3826,7 +3826,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				minPrc = (Bars.GetLow(i) < minPrc) ? Bars.GetLow(i) : minPrc;
 			}
 			
-			maxPix = (float)(chartPanel.H - chartScale.GetYByValue(minPrc) - 25);
+			maxPix = (float)(chartPanel.H - chartScale.GetYByValue(minPrc) - tfNorm.FontSize * 2.5);
 			
 			if(maxPix < 10f)
 			{
