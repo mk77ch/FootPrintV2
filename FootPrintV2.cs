@@ -473,6 +473,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			public double vol = 0.0;
 			public double ask = 0.0;
 			public double bid = 0.0;
+			public double dta = 0.0;
 			
 			public RowItem()
 			{}
@@ -482,18 +483,24 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				this.vol = vol;
 				this.ask = ask;
 				this.bid = bid;
+				
+				this.dta = this.ask - this.bid;
 			}
 			
 			public void addAsk(double vol)
 			{
 				this.ask += vol;
 				this.vol += vol;
+				
+				this.dta = this.ask - this.bid;
 			}
 			
 			public void addBid(double vol)
 			{
 				this.bid += vol;
 				this.vol += vol;
+				
+				this.dta = this.ask - this.bid;
 			}
 			
 			public void addVol(double vol)
@@ -1663,7 +1670,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							BarItems[0].custProfile.vol += barItem.vol;
 							BarItems[0].custProfile.ask += barItem.ask;
 							BarItems[0].custProfile.bid += barItem.bid;
-							BarItems[0].custProfile.dta  = BarItems[0].custProfile.ask - BarItems[0].custProfile.bid;
+							BarItems[0].custProfile.dta += barItem.dtc;
 							
 							foreach(KeyValuePair<double, RowItem> ri in barItem.rowItems)
 							{
@@ -1672,6 +1679,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 								BarItems[0].custProfile.rowItems[ri.Key].vol += ri.Value.vol;
 								BarItems[0].custProfile.rowItems[ri.Key].ask += ri.Value.ask;
 								BarItems[0].custProfile.rowItems[ri.Key].bid += ri.Value.bid;
+								BarItems[0].custProfile.rowItems[ri.Key].dta += ri.Value.dta;
 							}
 							
 							vol += barItem.vol;
@@ -2075,6 +2083,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						x1 = chartControl.GetXByBarIndex(ChartBars, i - 1);
 						x2 = chartControl.GetXByBarIndex(ChartBars, i);
 						x2 = (i == ChartBars.ToIndex) ? x2 + (barWidth / 2) : x2;
+						x2 = (showFootprint && footprintDisplayType == VPV2FootprintDisplayType.Numbers && footprintDeltaProfile) ? x2 + (cellWidth + 2) : x2;
 						
 						if(i == ChartBars.ToIndex && custProfileMapExt)
 						{
@@ -3094,11 +3103,11 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			
 			double askVol;
 			double bidVol;
+			double dtaVol;
 			double maxVol = 0.0;
 			double tmpVol = 0.0;
 			double maxDta = 0.0;
 			double tmpDta = 0.0;
-			double dtaVal = 0.0;
 			double barWidth;
 			
 			float  oRng = footprintMaxOpa;
@@ -3243,12 +3252,12 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							if(currBarItem.cdh < 0.0)
 							{
 								bidBrush.Opacity = 0.6f;
-								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y - textLayoutDta.Metrics.Height - tfNorm.FontSize * 0.5f), textLayoutDta, bidBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y - textLayoutDta.Metrics.Height - tfNorm.FontSize * 0.7f), textLayoutDta, bidBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							}
 							else
 							{
 								askBrush.Opacity = 0.6f;
-								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y - textLayoutDta.Metrics.Height - tfNorm.FontSize * 0.5f), textLayoutDta, askBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y - textLayoutDta.Metrics.Height - tfNorm.FontSize * 0.7f), textLayoutDta, askBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							}
 							
 							textLayoutDta.Dispose();
@@ -3260,12 +3269,12 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							if(currBarItem.cdl < 0.0)
 							{
 								bidBrush.Opacity = 0.6f;
-								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y + rect.Height + tfNorm.FontSize * 0.5f), textLayoutDta, bidBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y + rect.Height + tfNorm.FontSize * 0.7f), textLayoutDta, bidBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							}
 							else
 							{
 								askBrush.Opacity = 0.6f;
-								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y + rect.Height + tfNorm.FontSize * 0.5f), textLayoutDta, askBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y + rect.Height + tfNorm.FontSize * 0.7f), textLayoutDta, askBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							}
 							
 							textLayoutDta.Dispose();
@@ -3304,8 +3313,9 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				{
 					askVol = ri.Value.ask;
 					bidVol = ri.Value.bid;
+					dtaVol = ri.Value.dta;
 					
-					dtc += (askVol - bidVol);
+					dtc += dtaVol;
 					
 					y1 = ((chartScale.GetYByValue(ri.Key) + chartScale.GetYByValue(ri.Key + TickSize)) / 2) + 1;
 					y2 = ((chartScale.GetYByValue(ri.Key) + chartScale.GetYByValue(ri.Key - TickSize)) / 2) - 1;
@@ -3508,9 +3518,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					
 					if(footprintDisplayType == VPV2FootprintDisplayType.Numbers && footprintDeltaProfile)
 					{
-						dtaVal = askVol - bidVol;
-						
-						barWidth = (cellWidth / maxDta) * Math.Abs(dtaVal);
+						barWidth = (cellWidth / maxDta) * Math.Abs(dtaVol);
 						barWidth = Math.Round(barWidth);
 						
 						if(barWidth >= 1)
@@ -3529,9 +3537,9 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							
 							/// ---
 							
-							opac = (footprintDeltaGradient) ? (float)((0.5f / maxDta) * Math.Abs(dtaVal)) + 0.1f : 0.5f;
+							opac = (footprintDeltaGradient) ? (float)((0.5f / maxDta) * Math.Abs(dtaVol)) + 0.1f : 0.5f;
 							
-							if(dtaVal > 0.0)
+							if(dtaVol > 0.0)
 							{
 								askBrush.Opacity = opac;
 								RenderTarget.DrawRectangle(rect, askBrush);
@@ -3541,7 +3549,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 								
 								RenderTarget.FillRectangle(rect, askBrush);
 							}
-							if(dtaVal < 0.0)
+							if(dtaVol < 0.0)
 							{
 								bidBrush.Opacity = opac;
 								RenderTarget.DrawRectangle(rect, bidBrush);
@@ -3818,7 +3826,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				minPrc = (Bars.GetLow(i) < minPrc) ? Bars.GetLow(i) : minPrc;
 			}
 			
-			maxPix = (float)(chartPanel.H - chartScale.GetYByValue(minPrc) - tfNorm.FontSize * 2.5);
+			maxPix = (float)(chartPanel.H - chartScale.GetYByValue(minPrc) - 25);
 			
 			if(maxPix < 10f)
 			{
