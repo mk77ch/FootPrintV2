@@ -2183,7 +2183,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				BarItem barItem;
 				
 				double sRng = 0.0;
-				float  oRng = (custProfileMapType == FPV2MapDisplayType.Volume) ? mapMaxOpa : mapMaxOpa - 0.2f;
+				float  oRng = (custProfileMapType == FPV2MapDisplayType.Volume) ? mapMaxOpa : mapMaxOpa / 2;
 				double size = 0.0;
 				float  opac = 0.0f;
 				double cont = 0.0;
