@@ -763,9 +763,9 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				
 				/// ---
 				
-				if(ChartPanel != null)
+				if(ChartControl != null)
                 {
-                    ChartPanel.KeyDown += chartPanelOnKeyDown;
+                    ChartControl.KeyDown += chartControlOnKeyDown;
                 }
 				
 				/// ---
@@ -787,9 +787,9 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				
 				/// ---
 				
-				if(ChartPanel != null)
+				if(ChartControl != null)
                 {
-                    ChartPanel.KeyDown -= chartPanelOnKeyDown;
+                    ChartControl.KeyDown -= chartControlOnKeyDown;
                 }
 				
 				/// ---
@@ -810,7 +810,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		
 		#region chartPanelOnKeyDown
 		
-		public void chartPanelOnKeyDown(object sender, KeyEventArgs e)
+		public void chartControlOnKeyDown(object sender, KeyEventArgs e)
         {
 			if((Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift)) && e.Key == Key.Space)
 			{
@@ -823,7 +823,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					toggleMap();
 				}
 			}
-			if((Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl)) && e.Key == Key.Space)
+			else if((Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl)) && e.Key == Key.Space)
 			{
 				if(footprintHotKey == FPV2Hotkeys.CtrlSpace)
 				{
@@ -832,6 +832,24 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				if(custProfileShow && mapHotKey == FPV2Hotkeys.CtrlSpace)
 				{
 					toggleMap();
+				}
+			}
+			else if(custProfileMap)
+			{
+				if(e.Key == Key.Space)
+				{
+					if(custProfileMapType == FPV2MapDisplayType.Volume)
+					{
+						custProfileMapType = FPV2MapDisplayType.Delta;
+						topMenuItem2SubItem2.Header = "Switch to Volume";
+					}
+					else
+					{
+						custProfileMapType = FPV2MapDisplayType.Volume;
+						topMenuItem2SubItem2.Header = "Switch to Delta";
+					}
+					
+					refreshChart();
 				}
 			}
         }
@@ -978,6 +996,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			topMenuItem2SubItem2 = new Gui.Tools.NTMenuItem()
 			{
 				Header				= (custProfileMapType == FPV2MapDisplayType.Volume) ? "Switch to Delta" : "Switch to Volume",
+				InputGestureText	= "Space",
 				Foreground			= Brushes.Silver,
 				Margin				= new System.Windows.Thickness(0),
 				Padding				= new System.Windows.Thickness(1),
@@ -1855,7 +1874,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				ts = (Math.Abs(y1 - y2) < ts) ? Math.Abs(y1 - y2) : ts;
 			}
 			
-			return (double)Math.Min(Math.Round(ts*0.6), ls);
+			return (double)Math.Min(Math.Floor(ts*0.5), ls);
 		}
 		
 		/// getCellWidth
@@ -1906,7 +1925,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				tl.Dispose();
 			}
 			
-			return (int)(maxWidth + 9f);
+			return (int)Math.Round(maxWidth * 1.5);
 		}
 		
 		#endregion
@@ -3451,7 +3470,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					if(footprintDisplayType == FPV2FootprintDisplayType.Numbers)
 					{
 						opac = (footprintGradient) ? (float)Math.Round((oRng / maxVol) * ri.Value.ask, 5) + 0.04f : 0.15f;
-						opac = (!footprintGradient && ri.Key == poc) ? 0.3f : opac;
+						opac = (!footprintGradient && ri.Key == poc) ? opac + 0.3f : opac;
 						opac = (i == ChartBars.ToIndex && GetCurrentAsk() == ri.Key && ri.Key == prc) ? opac + 0.15f : opac;
 						
 						forBrush.Opacity = opac;
@@ -3695,7 +3714,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					if(footprintDisplayType == FPV2FootprintDisplayType.Numbers)
 					{
 						opac = (footprintGradient) ? (float)Math.Round((oRng / maxVol) * ri.Value.bid, 5) + 0.04f : 0.15f;
-						opac = (!footprintGradient && ri.Key == poc) ? 0.3f : opac;
+						opac = (!footprintGradient && ri.Key == poc) ? opac + 0.3f : opac;
 						opac = (i == ChartBars.ToIndex && GetCurrentBid() == ri.Key && ri.Key == prc) ? opac + 0.15f : opac;
 						
 						forBrush.Opacity = opac;
