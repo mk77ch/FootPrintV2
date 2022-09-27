@@ -2003,6 +2003,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			
 			try
 			{
+				scrollFixedScale(chartScale);
+				
+				/// ---
+				
 				barFullWidth = chartControl.GetBarPaintWidth(ChartBars);
 				barHalfWidth = ((barFullWidth - 1) / 2) + 2;
 				
@@ -2033,34 +2037,62 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				/// --- 
 				
 				drawMap(chartControl, chartScale);
+				drawBottomArea(chartControl, chartScale);
 				drawProfiles(chartControl, chartScale);
 				drawClose(chartControl, chartScale);
 				drawFootPrint(chartControl, chartScale);
 				drawTapeStrip(chartControl, chartScale);
-				drawBottomArea(chartControl, chartScale);
-				
-				/// ---
-				
+			}
+			catch(Exception exception)
+			{
+				if(log)
+				{
+					NinjaTrader.Code.Output.Process(exception.ToString(), PrintTo.OutputTab1);
+				}
+			}
+		}
+		
+		#endregion
+		
+		#region scrollFixedScale
+		
+		/// scrollFixedScale
+		///
+		private void scrollFixedScale(ChartScale chartScale)
+		{
+			try
+			{
 				if(chartScale.Properties.YAxisRangeType == YAxisRangeType.Fixed)
 				{
-					double mhi = Bars.GetHigh(ChartBars.ToIndex);
-					double mlo = Bars.GetLow(ChartBars.ToIndex);
-					double min = chartScale.Properties.FixedScaleMin;
-					double max = chartScale.Properties.FixedScaleMax;
-					double rng = max - min;
-					double off = TickSize * 3;
-					double dif = TickSize * 4;
+					double prcRng = 0.0;
+					double upperM = 0.0;
+					double lowerM = 0.0;
+					double currHi = Bars.GetHigh(ChartBars.ToIndex);
+					double currLo = Bars.GetLow(ChartBars.ToIndex);
+					double prcDif = 0.0;
 					
-					if(mhi >= max - off)
+					currHi += (showFootprint) ? TickSize / 2.0 : 0;
+					
+					prcRng = chartScale.MaxMinusMin;
+					upperM = (prcRng / 100.0) * chartScale.Properties.AutoScaleMarginUpper;
+					lowerM = (prcRng / 100.0) * chartScale.Properties.AutoScaleMarginLower;
+					
+					if(currHi > chartScale.MaxValue - upperM)
 					{
-						chartScale.Properties.FixedScaleMax = mhi + dif;
-						chartScale.Properties.FixedScaleMin = (mhi + dif) - rng;
+						prcDif = currHi - (chartScale.MaxValue - upperM);
+						chartScale.Properties.FixedScaleMax = chartScale.Properties.FixedScaleMax + prcDif;
+						chartScale.Properties.FixedScaleMin = chartScale.Properties.FixedScaleMin + prcDif;
+						
+						refreshChart();
 					}
 					
-					if(mlo <= min + off)
+					if(currLo < chartScale.MinValue + lowerM)
 					{
-						chartScale.Properties.FixedScaleMin = (mlo - dif);
-						chartScale.Properties.FixedScaleMax = (mlo - dif) + rng;
+						prcDif = chartScale.MinValue + lowerM - currLo;
+						chartScale.Properties.FixedScaleMax = chartScale.Properties.FixedScaleMax - prcDif;
+						chartScale.Properties.FixedScaleMin = chartScale.Properties.FixedScaleMin - prcDif;
+						
+						refreshChart();
 					}
 				}
 			}
@@ -3939,14 +3971,24 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			/// ---
 			
 			double minPrc = double.MaxValue;
+			double maxPrc = double.MinValue;
+			double prcRng = 0.0;
+			float  pixRng = 0f;
 			float  maxPix = 0f;
+			float  ticPix = chartScale.GetPixelsForDistance(TickSize);
 			
 			for(int i=ChartBars.FromIndex;i<=ChartBars.ToIndex;i++)
 			{
 				minPrc = (Bars.GetLow(i) < minPrc) ? Bars.GetLow(i) : minPrc;
+				maxPrc = (Bars.GetHigh(i) > maxPrc) ? Bars.GetHigh(i) : maxPrc;
 			}
 			
-			maxPix = (float)(chartPanel.H - chartScale.GetYByValue(minPrc) - tfNorm.FontSize * 2.5);
+			
+			prcRng = (chartScale.Properties.YAxisRangeType == YAxisRangeType.Fixed) ? chartScale.MaxMinusMin : maxPrc - minPrc;
+			pixRng = chartScale.GetPixelsForDistance(prcRng);
+			maxPix = (float)((pixRng / 100.0f) * chartScale.Properties.AutoScaleMarginLower);
+			maxPix -= (showFootprint) ? ticPix / 2.0f : 1f;
+			maxPix -= (showFootprint && footprintDeltaOutline) ? (tfNorm.FontSize * 2.0f) : 0f;
 			
 			if(maxPix < 10f)
 			{
