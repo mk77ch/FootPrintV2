@@ -2044,11 +2044,11 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				/// --- 
 				
 				drawMap(chartControl, chartScale);
-				drawBottomArea(chartControl, chartScale);
 				drawProfiles(chartControl, chartScale);
 				drawClose(chartControl, chartScale);
 				drawFootPrint(chartControl, chartScale);
 				drawTapeStrip(chartControl, chartScale);
+				drawBottomArea(chartControl, chartScale);
 			}
 			catch(Exception exception)
 			{
@@ -4000,6 +4000,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			float  ht	  = 0f;
 			float  offset = 0f;
 			float  opacity = 0f;
+			double maxDtc = double.MinValue;
 			double minDta = double.MaxValue;
 			double maxDta = double.MinValue;
 			double minCdc = double.MaxValue;
@@ -4027,7 +4028,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				if(currBarItem.rowItems.IsEmpty) { continue; }
 				
 				maxVol = (Math.Abs(currBarItem.vol) > maxVol) ? Math.Abs(currBarItem.vol) : maxVol;
-				maxDta = (Math.Abs(currBarItem.dtc) > maxDta) ? Math.Abs(currBarItem.dtc) : maxDta;
+				maxDtc = (Math.Abs(currBarItem.dtc) > maxDtc) ? Math.Abs(currBarItem.dtc) : maxDtc;
 				minCdc = (Math.Abs(currBarItem.cdc) < minCdc) ? Math.Abs(currBarItem.cdc) : minCdc;
 				maxCdc = (Math.Abs(currBarItem.cdc) > maxCdc) ? Math.Abs(currBarItem.cdc) : maxCdc;
 				minDta = (currBarItem.cdl < minDta) ? currBarItem.cdl : minDta;
@@ -4068,7 +4069,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						bckBrush.Opacity = 1.0f;
 						RenderTarget.FillRectangle(rect, bckBrush);
 						
-						opacity = (bottomAreaGradient) ? (float)((0.5f / cdcRng) * Math.Abs(currBarItem.cdc)) : 0.5f;
+						opacity = (bottomAreaGradient) ? (float)((0.4f / cdcRng) * (Math.Abs(currBarItem.cdc) - minCdc)) : 0.4f;
 						
 						if(opacity >= 0.01f)
 						{
@@ -4099,7 +4100,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						{
 							if(bottomAreaGradient)
 							{
-								opacity = (float)((0.5f / cdcRng) * Math.Abs(currBarItem.cdc)) + 0.5f;
+								opacity = (float)((0.4f / cdcRng) * (Math.Abs(currBarItem.cdc) - minCdc)) + 0.6f;
 								
 								if(currBarItem.cdc > 0.0)
 								{
@@ -4119,8 +4120,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							}
 							else
 							{
-								bckBrush.Opacity = 1.0f;
-								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, bckBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+								forBrush.Opacity = 1.0f;
+								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, forBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							}
 						}
 						
@@ -4183,7 +4184,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						bckBrush.Opacity = 1.0f;
 						RenderTarget.FillRectangle(rect, bckBrush);
 						
-						opacity = (bottomAreaGradient) ? (float)((0.5f / maxVol) * Math.Abs(currBarItem.vol)) : 0.5f;
+						opacity = (bottomAreaGradient) ? (float)((0.4f / maxVol) * Math.Abs(currBarItem.vol)) : 0.4f;
 						
 						if(opacity >= 0.01f)
 						{
@@ -4214,7 +4215,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						{
 							if(bottomAreaGradient)
 							{
-								opacity = (float)((0.5f / maxVol) * Math.Abs(currBarItem.vol)) + 0.5f;
+								opacity = (float)((0.4f / maxVol) * Math.Abs(currBarItem.vol)) + 0.6f;
 								
 								if(currBarItem.cls > currBarItem.opn)
 								{
@@ -4234,8 +4235,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							}
 							else
 							{
-								bckBrush.Opacity = 1.0f;
-								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, bckBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+								forBrush.Opacity = 1.0f;
+								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, forBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							}
 						}
 						
@@ -4298,7 +4299,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						bckBrush.Opacity = 1.0f;
 						RenderTarget.FillRectangle(rect, bckBrush);
 						
-						opacity = (bottomAreaGradient) ? (float)((0.5f / maxDta) * Math.Abs(currBarItem.dtc)) : 0.5f;
+						opacity = (bottomAreaGradient) ? (float)((0.4f / maxDtc) * Math.Abs(currBarItem.dtc)) : 0.4f;
 						
 						if(opacity >= 0.01f)
 						{
@@ -4329,7 +4330,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						{
 							if(bottomAreaGradient)
 							{
-								opacity = (float)((0.5f / maxDta) * Math.Abs(currBarItem.dtc)) + 0.5f;
+								opacity = (float)((0.4f / maxDtc) * Math.Abs(currBarItem.dtc)) + 0.6f;
 								
 								if(currBarItem.dtc > 0.0)
 								{
@@ -4349,8 +4350,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							}
 							else
 							{
-								bckBrush.Opacity = 1.0f;
-								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, bckBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+								forBrush.Opacity = 1.0f;
+								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, forBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							}
 						}
 						
@@ -4427,7 +4428,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					if(minDta < 0.0 && maxDta > 0.0)
 					{
 						rect.X      = (float)(chartPanel.X);
-						rect.Y      = (float)(chartPanel.H - ((0.0 - minDta) * factor));
+						rect.Y      = (float)(chartPanel.H - ((0.0 - minDta) * factor)) - offset;
 						rect.Width  = wt;
 						rect.Height = (float)((0.0 - minDta) * factor);
 						
@@ -4435,18 +4436,18 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						RenderTarget.FillRectangle(rect, bidBrush);
 						
 						rect.X      = (float)(chartPanel.X);
-						rect.Y      = (float)(chartPanel.H - ((maxDta - minDta) * factor));
+						rect.Y      = (float)(chartPanel.H - ((maxDta - minDta) * factor) - offset);
 						rect.Width  = wt;
-						rect.Height = (float)(maxPix - ((0.0 - minDta) * factor));
+						rect.Height = (float)(maxPix - ((0.0 - minDta) * factor) - offset);
 						
 						askBrush.Opacity = 0.04f;
 						RenderTarget.FillRectangle(rect, askBrush);
 						
 						vec1.X = (float)(chartPanel.X);
-						vec1.Y = (float)(chartPanel.H - ((0.0 - minDta) * factor));
+						vec1.Y = (float)(chartPanel.H - ((0.0 - minDta) * factor) - offset);
 						
 						vec2.X = (float)(chartPanel.X + wt);
-						vec2.Y = (float)(chartPanel.H - ((0.0 - minDta) * factor));
+						vec2.Y = (float)(chartPanel.H - ((0.0 - minDta) * factor) - offset);
 						
 						forBrush.Opacity = 0.1f;
 						RenderTarget.DrawLine(vec1, vec2, forBrush, 1);
@@ -4494,19 +4495,19 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						
 						if(currBarItem.dtc > 0.0)
 						{
-							askBrush.Opacity = 0.6f;
+							askBrush.Opacity = 0.4f;
 							RenderTarget.FillRectangle(rect, askBrush);
 						}
 						
 						if(currBarItem.dtc < 0.0)
 						{
-							bidBrush.Opacity = 0.6f;
+							bidBrush.Opacity = 0.4f;
 							RenderTarget.FillRectangle(rect, bidBrush);
 						}
 						
 						if(currBarItem.dtc == 0.0)
 						{
-							forBrush.Opacity = 0.6f;
+							forBrush.Opacity = 0.4f;
 							RenderTarget.FillRectangle(rect, forBrush);
 						}
 						
@@ -4520,19 +4521,19 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						
 						if(currBarItem.dtc > 0.0)
 						{
-							askBrush.Opacity = 0.6f;
+							askBrush.Opacity = 0.4f;
 							RenderTarget.DrawLine(vec1, vec2, askBrush, 1);
 						}
 						
 						if(currBarItem.dtc < 0.0)
 						{
-							bidBrush.Opacity = 0.6f;
+							bidBrush.Opacity = 0.4f;
 							RenderTarget.DrawLine(vec1, vec2, bidBrush, 1);
 						}
 						
 						if(currBarItem.dtc == 0.0)
 						{
-							forBrush.Opacity = 0.6f;
+							forBrush.Opacity = 0.4f;
 							RenderTarget.DrawLine(vec1, vec2, forBrush, 1);
 						}
 						
@@ -4546,19 +4547,19 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						
 						if(currBarItem.dtc > 0.0)
 						{
-							askBrush.Opacity = 0.6f;
+							askBrush.Opacity = 0.4f;
 							RenderTarget.DrawLine(vec1, vec2, askBrush, 1);
 						}
 						
 						if(currBarItem.dtc < 0.0)
 						{
-							bidBrush.Opacity = 0.6f;
+							bidBrush.Opacity = 0.4f;
 							RenderTarget.DrawLine(vec1, vec2, bidBrush, 1);
 						}
 						
 						if(currBarItem.dtc == 0.0)
 						{
-							forBrush.Opacity = 0.6f;
+							forBrush.Opacity = 0.4f;
 							RenderTarget.DrawLine(vec1, vec2, forBrush, 1);
 						}
 					}
@@ -4585,7 +4586,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						if(currBarItem.dtc == 0) { continue; }
 						
 						x1 = chartControl.GetXByBarIndex(ChartBars, i);
-						ht = (float)Math.Round(((maxPix - offset) / maxDta) * Math.Abs(currBarItem.dtc));
+						ht = (float)Math.Round(((maxPix - offset) / maxDtc) * Math.Abs(currBarItem.dtc));
 						
 						if(ht >= 1f)
 						{
@@ -4609,13 +4610,13 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							
 							if(currBarItem.dtc > 0.0)
 							{
-								askBrush.Opacity = (bottomAreaGradient) ? (float)((0.5f / maxDta) * Math.Abs(currBarItem.dtc)) : 0.5f;
+								askBrush.Opacity = (bottomAreaGradient) ? (float)((0.4f / maxDtc) * Math.Abs(currBarItem.dtc)) : 0.4f;
 								RenderTarget.FillRectangle(rect, askBrush);
 							}
 							
 							if(currBarItem.dtc < 0.0)
 							{
-								bidBrush.Opacity = (bottomAreaGradient) ? (float)((0.5f / maxDta) * Math.Abs(currBarItem.dtc)) : 0.5f;
+								bidBrush.Opacity = (bottomAreaGradient) ? (float)((0.4f / maxDtc) * Math.Abs(currBarItem.dtc)) : 0.4f;
 								RenderTarget.FillRectangle(rect, bidBrush);
 							}
 						}
@@ -4667,17 +4668,17 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							
 							if(currBarItem.cls > currBarItem.opn)
 							{
-								askBrush.Opacity = (bottomAreaGradient) ? (float)((0.5f / maxVol) * Math.Abs(currBarItem.vol)) : 0.5f;
+								askBrush.Opacity = (bottomAreaGradient) ? (float)((0.4f / maxVol) * Math.Abs(currBarItem.vol)) : 0.4f;
 								RenderTarget.FillRectangle(rect, askBrush);
 							}
 							else if(currBarItem.cls < currBarItem.opn)
 							{
-								bidBrush.Opacity = (bottomAreaGradient) ? (float)((0.5f / maxVol) * Math.Abs(currBarItem.vol)) : 0.5f;
+								bidBrush.Opacity = (bottomAreaGradient) ? (float)((0.4f / maxVol) * Math.Abs(currBarItem.vol)) : 0.4f;
 								RenderTarget.FillRectangle(rect, bidBrush);
 							}
 							else
 							{
-								forBrush.Opacity = (bottomAreaGradient) ? (float)((0.5f / maxVol) * Math.Abs(currBarItem.vol)) : 0.5f;
+								forBrush.Opacity = (bottomAreaGradient) ? (float)((0.4f / maxVol) * Math.Abs(currBarItem.vol)) : 0.4f;
 								RenderTarget.FillRectangle(rect, forBrush);
 							}
 						}
