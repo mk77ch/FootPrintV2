@@ -605,6 +605,28 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		private NinjaTrader.Gui.Tools.NTMenuItem	topMenuItem3SubItem7;
 		private NinjaTrader.Gui.Tools.NTMenuItem	topMenuItem3SubItem8;
 		
+		/// ---
+		
+		private bool brushesInitialized = false;
+		
+		private SolidColorBrush bckColor;
+		
+		private SharpDX.Direct2D1.Brush bckBrush;
+		private SharpDX.Direct2D1.Brush mapBrush;
+		private SharpDX.Direct2D1.Brush pocBrush;
+		private SharpDX.Direct2D1.Brush proBrush;
+		private SharpDX.Direct2D1.Brush ntlBrush;
+		private SharpDX.Direct2D1.Brush askBrush;
+		private SharpDX.Direct2D1.Brush bidBrush;
+		
+		//Stopwatch sw = new Stopwatch();
+		/*
+		sw.Reset();
+		sw.Start();
+		sw.Stop();
+		Print(": " + sw.ElapsedMilliseconds);
+		*/
+		
 		#endregion
 		
 		#region OnStateChange
@@ -808,6 +830,22 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				if(tfMini != null) tfMini.Dispose();
 				if(tfNorm != null) tfNorm.Dispose();
 				if(tfBold != null) tfBold.Dispose();
+				
+				/// ---
+				
+				if(brushesInitialized)
+				{
+					bckColor = null;
+					bckBrush.Dispose();
+					mapBrush.Dispose();
+					pocBrush.Dispose();
+					proBrush.Dispose();
+					ntlBrush.Dispose();
+					askBrush.Dispose();
+					bidBrush.Dispose();
+				}
+				
+				/// ---
 				
 				TapeStripItems.Clear();
 			}
@@ -1987,6 +2025,35 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		
 		#endregion
 		
+		#region OnRenderTargetChanged
+		
+		public override void OnRenderTargetChanged()
+		{
+			if(brushesInitialized)
+			{
+				bckBrush.Dispose();
+				mapBrush.Dispose();
+				pocBrush.Dispose();
+				proBrush.Dispose();
+				ntlBrush.Dispose();
+				askBrush.Dispose();
+				bidBrush.Dispose();
+				
+				if(RenderTarget != null)
+				{
+					bckBrush = bckColor.ToDxBrush(RenderTarget);
+					mapBrush = mapColor.ToDxBrush(RenderTarget);
+					pocBrush = pocColor.ToDxBrush(RenderTarget);
+					proBrush = profileColor.ToDxBrush(RenderTarget);
+					ntlBrush = neutralColor.ToDxBrush(RenderTarget);
+					askBrush = bullishColor.ToDxBrush(RenderTarget);
+					bidBrush = bearishColor.ToDxBrush(RenderTarget);
+				}
+			}
+		}
+		
+		#endregion
+		
 		#region OnRender
 		
 		/// OnRender
@@ -2041,7 +2108,23 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					ChartControl.Properties.BarMarginRight = bmr;
 				}
 				
-				/// --- 
+				/// ---
+				
+				if(!brushesInitialized)
+				{
+					bckColor = (SolidColorBrush)ChartControl.Properties.ChartBackground.Clone();
+					bckBrush = bckColor.ToDxBrush(RenderTarget);
+					mapBrush = mapColor.ToDxBrush(RenderTarget);
+					pocBrush = pocColor.ToDxBrush(RenderTarget);
+					proBrush = profileColor.ToDxBrush(RenderTarget);
+					ntlBrush = neutralColor.ToDxBrush(RenderTarget);
+					askBrush = bullishColor.ToDxBrush(RenderTarget);
+					bidBrush = bearishColor.ToDxBrush(RenderTarget);
+					
+					brushesInitialized = true;
+				}
+				
+				/// ---
 				
 				drawMap(chartControl, chartScale);
 				drawProfiles(chartControl, chartScale);
@@ -2127,10 +2210,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				SharpDX.Direct2D1.AntialiasMode oldAntialiasMode = RenderTarget.AntialiasMode;
 				RenderTarget.AntialiasMode = SharpDX.Direct2D1.AntialiasMode.Aliased;
 				
-				SharpDX.Direct2D1.Brush forBrush = neutralColor.ToDxBrush(RenderTarget);
-				SharpDX.Direct2D1.Brush askBrush = bullishColor.ToDxBrush(RenderTarget);
-				SharpDX.Direct2D1.Brush bidBrush = bearishColor.ToDxBrush(RenderTarget);
-				
 				SharpDX.RectangleF rect = new SharpDX.RectangleF();
 				SharpDX.Vector2    vec1 = new SharpDX.Vector2();
 				SharpDX.Vector2    vec2 = new SharpDX.Vector2();
@@ -2158,9 +2237,9 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				rect.Width  = (float)wd;
 				rect.Height = (float)ht;
 				
-				forBrush.Opacity = 0.1f;
+				ntlBrush.Opacity = 0.1f;
 				
-				RenderTarget.FillRectangle(rect, forBrush);
+				RenderTarget.FillRectangle(rect, ntlBrush);
 				
 				/// line
 				
@@ -2187,16 +2266,12 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				}
 				else
 				{
-					forBrush.Opacity = 0.5f;
+					ntlBrush.Opacity = 0.5f;
 				
-					RenderTarget.DrawLine(vec1, vec2, forBrush, 1, dLine.StrokeStyle);	
+					RenderTarget.DrawLine(vec1, vec2, ntlBrush, 1, dLine.StrokeStyle);	
 				}
 				
 				/// ---
-				
-				forBrush.Dispose();
-				askBrush.Dispose();
-				bidBrush.Dispose();
 				
 				RenderTarget.AntialiasMode = oldAntialiasMode;
 			}
@@ -2223,13 +2298,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				
 				SharpDX.Direct2D1.AntialiasMode oldAntialiasMode = RenderTarget.AntialiasMode;
 				RenderTarget.AntialiasMode = SharpDX.Direct2D1.AntialiasMode.Aliased;
-				
-				SolidColorBrush askColor = (SolidColorBrush)bullishColor.Clone();
-				SolidColorBrush bidColor = (SolidColorBrush)bearishColor.Clone();
-				
-				SharpDX.Direct2D1.Brush mapBrush = mapColor.ToDxBrush(RenderTarget);
-				SharpDX.Direct2D1.Brush askBrush = askColor.ToDxBrush(RenderTarget);
-				SharpDX.Direct2D1.Brush bidBrush = bidColor.ToDxBrush(RenderTarget);
 				
 				SharpDX.RectangleF rect = new SharpDX.RectangleF();
 				
@@ -2331,10 +2399,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				
 				/// ---
 				
-				mapBrush.Dispose();
-				askBrush.Dispose();
-				bidBrush.Dispose();
-				
 				RenderTarget.AntialiasMode = oldAntialiasMode;
 			}
 			catch(Exception exception)
@@ -2402,14 +2466,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				SharpDX.Direct2D1.AntialiasMode oldAntialiasMode = RenderTarget.AntialiasMode;
 				RenderTarget.AntialiasMode = SharpDX.Direct2D1.AntialiasMode.Aliased;
 				
-				SolidColorBrush bckColor = (SolidColorBrush)ChartControl.Properties.ChartBackground.Clone();
-				
-				SharpDX.Direct2D1.Brush bckBrush = bckColor.ToDxBrush(RenderTarget);
-				SharpDX.Direct2D1.Brush forBrush = profileColor.ToDxBrush(RenderTarget);
-				SharpDX.Direct2D1.Brush askBrush = bullishColor.ToDxBrush(RenderTarget);
-				SharpDX.Direct2D1.Brush bidBrush = bearishColor.ToDxBrush(RenderTarget);
-				SharpDX.Direct2D1.Brush pocBrush = pocColor.ToDxBrush(RenderTarget);
-				
 				SharpDX.RectangleF rect = new SharpDX.RectangleF();
 				SharpDX.Vector2    vec1 = new SharpDX.Vector2();
 				SharpDX.Vector2    vec2 = new SharpDX.Vector2();
@@ -2459,8 +2515,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					}
 					else
 					{
-						forBrush.Opacity = 0.03f;
-						RenderTarget.FillRectangle(rect, forBrush);
+						proBrush.Opacity = 0.03f;
+						RenderTarget.FillRectangle(rect, proBrush);
 					}
 				}
 				
@@ -2656,7 +2712,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						RenderTarget.FillRectangle(rect, bckBrush);
 					}
 					
-					forBrush.Opacity = opac;
+					proBrush.Opacity = opac;
 					
 					if(opac >= 0.01f)
 					{
@@ -2668,7 +2724,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						}
 						else
 						{
-							RenderTarget.FillRectangle(rect, forBrush);
+							RenderTarget.FillRectangle(rect, proBrush);
 						}
 					}
 					
@@ -2749,9 +2805,9 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						}
 						else
 						{
-							forBrush.Opacity = 0.1f;
+							proBrush.Opacity = 0.1f;
 							
-							RenderTarget.FillRectangle(rect, forBrush);
+							RenderTarget.FillRectangle(rect, proBrush);
 						}
 						
 						rect.X      = (float)(rx - imbWidth + 4f);
@@ -2772,9 +2828,9 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						}
 						else
 						{
-							forBrush.Opacity = 0.1f;
+							proBrush.Opacity = 0.1f;
 							
-							RenderTarget.FillRectangle(rect, forBrush);
+							RenderTarget.FillRectangle(rect, proBrush);
 						}
 					}
 				}
@@ -2831,7 +2887,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				
 				#region Bar
 				
-				forBrush.Opacity = 0.6f;
+				proBrush.Opacity = 0.6f;
 				askBrush.Opacity = 0.6f;
 				bidBrush.Opacity = 0.6f;
 				
@@ -2861,7 +2917,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					}
 					else
 					{
-						RenderTarget.DrawLine(vec1, vec2, forBrush, 1);
+						RenderTarget.DrawLine(vec1, vec2, proBrush, 1);
 					}
 					
 					/// bar low
@@ -2888,7 +2944,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					}
 					else
 					{
-						RenderTarget.DrawLine(vec1, vec2, forBrush, 1);
+						RenderTarget.DrawLine(vec1, vec2, proBrush, 1);
 					}
 					
 					/// bar - upper wick
@@ -2914,7 +2970,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					}
 					else
 					{
-						RenderTarget.DrawLine(vec1, vec2, forBrush, 1);
+						RenderTarget.DrawLine(vec1, vec2, proBrush, 1);
 					}
 					
 					/// bar - body
@@ -2974,7 +3030,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					}
 					else
 					{
-						RenderTarget.DrawLine(vec1, vec2, forBrush, 1);
+						RenderTarget.DrawLine(vec1, vec2, proBrush, 1);
 					}
 				}
 				else
@@ -3003,7 +3059,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					}
 					else
 					{
-						RenderTarget.DrawLine(vec1, vec2, forBrush, 1);
+						RenderTarget.DrawLine(vec1, vec2, proBrush, 1);
 					}
 					
 					/// low
@@ -3024,7 +3080,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					}
 					else
 					{
-						RenderTarget.DrawLine(vec1, vec2, forBrush, 1);
+						RenderTarget.DrawLine(vec1, vec2, proBrush, 1);
 					}
 					
 					/// ---
@@ -3045,7 +3101,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					}
 					else
 					{
-						RenderTarget.DrawLine(vec1, vec2, forBrush, 1);
+						RenderTarget.DrawLine(vec1, vec2, proBrush, 1);
 					}
 				}
 				
@@ -3066,7 +3122,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				
 				y1 = ((chartScale.GetYByValue(profile.min) + chartScale.GetYByValue(profile.min - TickSize)) / 2) + (float)(textLayoutSum.Metrics.Height / 2);
 				
-				RenderTarget.DrawTextLayout(new SharpDX.Vector2(rx - profileWidth - 6f, y1), textLayoutSum, forBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+				RenderTarget.DrawTextLayout(new SharpDX.Vector2(rx - profileWidth - 6f, y1), textLayoutSum, proBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 				
 				y1 = y1 + textLayoutSum.Metrics.Height;
 				
@@ -3083,7 +3139,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				
 				y1 = ((chartScale.GetYByValue(profile.max) + chartScale.GetYByValue(profile.max + TickSize)) / 2) - (float)(textLayoutSum.Metrics.Height * 1.5);
 				
-				RenderTarget.DrawTextLayout(new SharpDX.Vector2(rx - profileWidth - 6f, y1), textLayoutSum, forBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+				RenderTarget.DrawTextLayout(new SharpDX.Vector2(rx - profileWidth - 6f, y1), textLayoutSum, proBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 				
 				y1 = y1 - textLayoutSum.Metrics.Height;
 				
@@ -3104,12 +3160,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				
 				textLayoutSum.Dispose();
 				textLayoutDta.Dispose();
-				
-				bckBrush.Dispose();
-				forBrush.Dispose();
-				askBrush.Dispose();
-				bidBrush.Dispose();
-				pocBrush.Dispose();
 				
 				RenderTarget.AntialiasMode = oldAntialiasMode;
 			}
@@ -3139,9 +3189,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				
 				SharpDX.Direct2D1.AntialiasMode oldAntialiasMode = RenderTarget.AntialiasMode;
 				RenderTarget.AntialiasMode = SharpDX.Direct2D1.AntialiasMode.Aliased;
-				
-				SharpDX.Direct2D1.Brush askBrush = bullishColor.ToDxBrush(RenderTarget);
-				SharpDX.Direct2D1.Brush bidBrush = bearishColor.ToDxBrush(RenderTarget);
 				
 				SharpDX.Vector2 vect = new SharpDX.Vector2();
 				
@@ -3194,9 +3241,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				
 				/// ---
 				
-				askBrush.Dispose();
-				bidBrush.Dispose();
-				
 				RenderTarget.AntialiasMode = oldAntialiasMode;
 			}
 			catch(Exception exception)
@@ -3232,16 +3276,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			
 			SharpDX.Direct2D1.AntialiasMode oldAntialiasMode = RenderTarget.AntialiasMode;
 			RenderTarget.AntialiasMode = SharpDX.Direct2D1.AntialiasMode.Aliased;
-			
-			SolidColorBrush bckColor = (SolidColorBrush)ChartControl.Properties.ChartBackground.Clone();
-			SolidColorBrush forColor = (SolidColorBrush)profileColor.Clone();
-			SolidColorBrush askColor = (SolidColorBrush)bullishColor.Clone();
-			SolidColorBrush bidColor = (SolidColorBrush)bearishColor.Clone();
-			
-			SharpDX.Direct2D1.Brush bckBrush = bckColor.ToDxBrush(RenderTarget);
-			SharpDX.Direct2D1.Brush forBrush = forColor.ToDxBrush(RenderTarget);
-			SharpDX.Direct2D1.Brush askBrush = askColor.ToDxBrush(RenderTarget);
-			SharpDX.Direct2D1.Brush bidBrush = bidColor.ToDxBrush(RenderTarget);
 			
 			SimpleFont sfDynNorm = new SimpleFont("Consolas", dTextSize);
 			SimpleFont sfDynBold = new SimpleFont("Consolas", dTextSize){ Bold = true };
@@ -3371,8 +3405,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						}
 						else
 						{
-							forBrush.Opacity = 0.04f;
-							RenderTarget.FillRectangle(rect, forBrush);
+							proBrush.Opacity = 0.04f;
+							RenderTarget.FillRectangle(rect, proBrush);
 						}
 					}
 					
@@ -3386,12 +3420,12 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					
 					if(currBarItem.dtc < 0.0)
 					{
-						bidBrush.Opacity = 0.33f;
+						bidBrush.Opacity = 0.6f;
 						RenderTarget.DrawLine(vec1, vec2, bidBrush, 1);
 					}
 					else
 					{
-						askBrush.Opacity = 0.33f;
+						askBrush.Opacity = 0.6f;
 						RenderTarget.DrawLine(vec1, vec2, askBrush, 1);
 					}
 					
@@ -3444,12 +3478,12 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					
 					if(currBarItem.dtc < 0.0)
 					{
-						bidBrush.Opacity = 0.33f;
+						bidBrush.Opacity = 0.6f;
 						RenderTarget.DrawLine(vec1, vec2, bidBrush, 1);
 					}
 					else
 					{
-						askBrush.Opacity = 0.33f;
+						askBrush.Opacity = 0.6f;
 						RenderTarget.DrawLine(vec1, vec2, askBrush, 1);
 					}
 				}
@@ -3457,8 +3491,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				{
 					if(showFootprint && !custProfileMap)
 					{
-						forBrush.Opacity = 0.04f;
-						RenderTarget.FillRectangle(rect, forBrush);
+						proBrush.Opacity = 0.04f;
+						RenderTarget.FillRectangle(rect, proBrush);
 					}
 				}
 				
@@ -3508,14 +3542,14 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						opac = (!footprintGradient && ri.Key == poc) ? opac + 0.3f : opac;
 						opac = (i == ChartBars.ToIndex && GetCurrentAsk() == ri.Key && ri.Key == prc) ? opac + 0.15f : opac;
 						
-						forBrush.Opacity = opac;
+						proBrush.Opacity = opac;
 						
-						RenderTarget.DrawRectangle(rect, forBrush);
+						RenderTarget.DrawRectangle(rect, proBrush);
 						
 						rect.Width  = rect.Width  - 1;
 						rect.Height = rect.Height - 1;
 						
-						RenderTarget.FillRectangle(rect, forBrush);
+						RenderTarget.FillRectangle(rect, proBrush);
 						
 						rect.Width  = rect.Width  + 1;
 						rect.Height = rect.Height + 1;
@@ -3541,14 +3575,14 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							}
 							else
 							{
-								forBrush.Opacity = Math.Min(1.0f, opac + 0.4f);
-								RenderTarget.DrawRectangle(rect, forBrush);
+								proBrush.Opacity = Math.Min(1.0f, opac + 0.4f);
+								RenderTarget.DrawRectangle(rect, proBrush);
 								
 								rect.Width  = rect.Width  - 1;
 								rect.Height = rect.Height - 1;
 								
-								forBrush.Opacity = Math.Min(1.0f, opac + 0.4f);
-								RenderTarget.FillRectangle(rect, forBrush);
+								proBrush.Opacity = Math.Min(1.0f, opac + 0.4f);
+								RenderTarget.FillRectangle(rect, proBrush);
 							}
 						}
 						else if(isAskImbalance)
@@ -3572,14 +3606,13 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						}
 						else
 						{
-							forBrush.Opacity = opac;
-							RenderTarget.DrawRectangle(rect, forBrush);
+							proBrush.Opacity = opac;
+							RenderTarget.DrawRectangle(rect, proBrush);
 							
 							rect.Width  = rect.Width  - 1;
 							rect.Height = rect.Height - 1;
 							
-							forBrush.Opacity = opac;
-							RenderTarget.FillRectangle(rect, forBrush);
+							RenderTarget.FillRectangle(rect, proBrush);
 						}
 						
 						rect.Width  = rect.Width  + 1;
@@ -3592,7 +3625,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					{
 						if(ri.Key == poc)
 						{
-							forBrush.Opacity = 0.8f;
+							proBrush.Opacity = 0.8f;
 							
 							vec1.X = rect.X + cellWidth - 1f;
 							vec1.Y = y1 - 1f;
@@ -3600,7 +3633,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							vec2.X = rect.X + cellWidth - 1f;
 							vec2.Y = y2;
 							
-							RenderTarget.DrawLine(vec1, vec2, forBrush, 3);
+							RenderTarget.DrawLine(vec1, vec2, proBrush, 3);
 						}
 						
 						if(isAskImbalance)
@@ -3658,8 +3691,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						}
 						else
 						{
-							forBrush.Opacity = opac;
-							RenderTarget.DrawTextLayout(vec1, tl, forBrush);
+							proBrush.Opacity = opac;
+							RenderTarget.DrawTextLayout(vec1, tl, proBrush);
 						}
 						
 						/// ---
@@ -3752,14 +3785,14 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						opac = (!footprintGradient && ri.Key == poc) ? opac + 0.3f : opac;
 						opac = (i == ChartBars.ToIndex && GetCurrentBid() == ri.Key && ri.Key == prc) ? opac + 0.15f : opac;
 						
-						forBrush.Opacity = opac;
+						proBrush.Opacity = opac;
 						
-						RenderTarget.DrawRectangle(rect, forBrush);
+						RenderTarget.DrawRectangle(rect, proBrush);
 						
 						rect.Width  = rect.Width  - 1;
 						rect.Height = rect.Height - 1;
 						
-						RenderTarget.FillRectangle(rect, forBrush);
+						RenderTarget.FillRectangle(rect, proBrush);
 						
 						rect.Width  = rect.Width  + 1;
 						rect.Height = rect.Height + 1;
@@ -3785,14 +3818,13 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							}
 							else
 							{
-								forBrush.Opacity = Math.Min(1.0f, opac + 0.4f);
-								RenderTarget.DrawRectangle(rect, forBrush);
+								proBrush.Opacity = Math.Min(1.0f, opac + 0.4f);
+								RenderTarget.DrawRectangle(rect, proBrush);
 								
 								rect.Width  = rect.Width  - 1;
 								rect.Height = rect.Height - 1;
 								
-								forBrush.Opacity = Math.Min(1.0f, opac + 0.4f);
-								RenderTarget.FillRectangle(rect, forBrush);
+								RenderTarget.FillRectangle(rect, proBrush);
 							}
 						}
 						else if(isBidImbalance)
@@ -3816,14 +3848,13 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						}
 						else
 						{
-							forBrush.Opacity = opac;
-							RenderTarget.DrawRectangle(rect, forBrush);
+							proBrush.Opacity = opac;
+							RenderTarget.DrawRectangle(rect, proBrush);
 							
 							rect.Width  = rect.Width  - 1;
 							rect.Height = rect.Height - 1;
 							
-							forBrush.Opacity = opac;
-							RenderTarget.FillRectangle(rect, forBrush);
+							RenderTarget.FillRectangle(rect, proBrush);
 						}
 						
 						rect.Width  = rect.Width  + 1;
@@ -3836,7 +3867,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					{
 						if(ri.Key == poc)
 						{
-							forBrush.Opacity = 0.8f;
+							proBrush.Opacity = 0.8f;
 							
 							vec1.X = rect.X + 1f;
 							vec1.Y = y1 - 1f;
@@ -3844,7 +3875,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							vec2.X = rect.X + 1f;
 							vec2.Y = y2;
 							
-							RenderTarget.DrawLine(vec1, vec2, forBrush, 3);
+							RenderTarget.DrawLine(vec1, vec2, proBrush, 3);
 						}
 						
 						if(isBidImbalance)
@@ -3902,8 +3933,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						}
 						else
 						{
-							forBrush.Opacity = opac;
-							RenderTarget.DrawTextLayout(vec1, tl, forBrush);
+							proBrush.Opacity = opac;
+							RenderTarget.DrawTextLayout(vec1, tl, proBrush);
 						}
 						
 						/// ---
@@ -3929,11 +3960,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			
 			/// ---
 			
-			bckBrush.Dispose();
-			forBrush.Dispose();
-			askBrush.Dispose();
-			bidBrush.Dispose();
-			
 			RenderTarget.AntialiasMode = oldAntialiasMode;
 		}
 		
@@ -3953,13 +3979,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			
 			SharpDX.Direct2D1.AntialiasMode oldAntialiasMode = RenderTarget.AntialiasMode;
 			RenderTarget.AntialiasMode = SharpDX.Direct2D1.AntialiasMode.Aliased;
-			
-			SolidColorBrush bckColor = (SolidColorBrush)ChartControl.Properties.ChartBackground.Clone();
-			
-			SharpDX.Direct2D1.Brush bckBrush = bckColor.ToDxBrush(RenderTarget);
-			SharpDX.Direct2D1.Brush forBrush = neutralColor.ToDxBrush(RenderTarget);
-			SharpDX.Direct2D1.Brush askBrush = bullishColor.ToDxBrush(RenderTarget);
-			SharpDX.Direct2D1.Brush bidBrush = bearishColor.ToDxBrush(RenderTarget);
 			
 			ChartPanel chartPanel = chartControl.ChartPanels[chartScale.PanelIndex];
 			
@@ -4085,8 +4104,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							}
 							else
 							{
-								forBrush.Opacity = opacity;
-								RenderTarget.FillRectangle(rect, forBrush);
+								ntlBrush.Opacity = opacity;
+								RenderTarget.FillRectangle(rect, ntlBrush);
 							}
 						}
 						
@@ -4114,14 +4133,14 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 								}
 								else
 								{
-									forBrush.Opacity = opacity;
-									RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, forBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+									ntlBrush.Opacity = opacity;
+									RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, ntlBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 								}
 							}
 							else
 							{
-								forBrush.Opacity = 1.0f;
-								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, forBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+								ntlBrush.Opacity = 1.0f;
+								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, ntlBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							}
 						}
 						
@@ -4143,8 +4162,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							TextLayout tll = new SharpDX.DirectWrite.TextLayout(Core.Globals.DirectWriteFactory, "Delta (Cumulative)", tfNorm, rect.Width, rect.Height);
 									   tll.ParagraphAlignment = SharpDX.DirectWrite.ParagraphAlignment.Center;
 							
-							forBrush.Opacity = 0.4f;
-							RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tll, forBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+							ntlBrush.Opacity = 0.4f;
+							RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tll, ntlBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							
 							tll.Dispose();
 						}
@@ -4200,8 +4219,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							}
 							else
 							{
-								forBrush.Opacity = opacity;
-								RenderTarget.FillRectangle(rect, forBrush);
+								ntlBrush.Opacity = opacity;
+								RenderTarget.FillRectangle(rect, ntlBrush);
 							}
 						}
 						
@@ -4229,14 +4248,14 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 								}
 								else
 								{
-									forBrush.Opacity = opacity;
-									RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, forBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+									ntlBrush.Opacity = opacity;
+									RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, ntlBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 								}
 							}
 							else
 							{
-								forBrush.Opacity = 1.0f;
-								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, forBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+								ntlBrush.Opacity = 1.0f;
+								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, ntlBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							}
 						}
 						
@@ -4258,8 +4277,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							TextLayout tll = new SharpDX.DirectWrite.TextLayout(Core.Globals.DirectWriteFactory, "Volume", tfNorm, rect.Width, rect.Height);
 									   tll.ParagraphAlignment = SharpDX.DirectWrite.ParagraphAlignment.Center;
 							
-							forBrush.Opacity = 0.4f;
-							RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tll, forBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+							ntlBrush.Opacity = 0.4f;
+							RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tll, ntlBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							
 							tll.Dispose();
 						}
@@ -4315,8 +4334,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							}
 							else
 							{
-								forBrush.Opacity = opacity;
-								RenderTarget.FillRectangle(rect, forBrush);
+								ntlBrush.Opacity = opacity;
+								RenderTarget.FillRectangle(rect, ntlBrush);
 							}
 						}
 						
@@ -4344,14 +4363,14 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 								}
 								else
 								{
-									forBrush.Opacity = opacity;
-									RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, forBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+									ntlBrush.Opacity = opacity;
+									RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, ntlBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 								}
 							}
 							else
 							{
-								forBrush.Opacity = 1.0f;
-								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, forBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+								ntlBrush.Opacity = 1.0f;
+								RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tl, ntlBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							}
 						}
 						
@@ -4373,8 +4392,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							TextLayout tll = new SharpDX.DirectWrite.TextLayout(Core.Globals.DirectWriteFactory, "Delta", tfNorm, rect.Width, rect.Height);
 									   tll.ParagraphAlignment = SharpDX.DirectWrite.ParagraphAlignment.Center;
 							
-							forBrush.Opacity = 0.4f;
-							RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tll, forBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
+							ntlBrush.Opacity = 0.4f;
+							RenderTarget.DrawTextLayout(new SharpDX.Vector2(rect.X, rect.Y), tll, ntlBrush, SharpDX.Direct2D1.DrawTextOptions.NoSnap);
 							
 							tll.Dispose();
 						}
@@ -4449,8 +4468,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						vec2.X = (float)(chartPanel.X + wt);
 						vec2.Y = (float)(chartPanel.H - ((0.0 - minDta) * factor) - offset);
 						
-						forBrush.Opacity = 0.1f;
-						RenderTarget.DrawLine(vec1, vec2, forBrush, 1);
+						ntlBrush.Opacity = 0.1f;
+						RenderTarget.DrawLine(vec1, vec2, ntlBrush, 1);
 					}
 					
 					/// ---
@@ -4507,8 +4526,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						
 						if(currBarItem.dtc == 0.0)
 						{
-							forBrush.Opacity = 0.4f;
-							RenderTarget.FillRectangle(rect, forBrush);
+							ntlBrush.Opacity = 0.4f;
+							RenderTarget.FillRectangle(rect, ntlBrush);
 						}
 						
 						/// upper wick
@@ -4533,8 +4552,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						
 						if(currBarItem.dtc == 0.0)
 						{
-							forBrush.Opacity = 0.4f;
-							RenderTarget.DrawLine(vec1, vec2, forBrush, 1);
+							ntlBrush.Opacity = 0.4f;
+							RenderTarget.DrawLine(vec1, vec2, ntlBrush, 1);
 						}
 						
 						/// lower wick
@@ -4559,8 +4578,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						
 						if(currBarItem.dtc == 0.0)
 						{
-							forBrush.Opacity = 0.4f;
-							RenderTarget.DrawLine(vec1, vec2, forBrush, 1);
+							ntlBrush.Opacity = 0.4f;
+							RenderTarget.DrawLine(vec1, vec2, ntlBrush, 1);
 						}
 					}
 				}
@@ -4678,8 +4697,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							}
 							else
 							{
-								forBrush.Opacity = (bottomAreaGradient) ? (float)((0.4f / maxVol) * Math.Abs(currBarItem.vol)) : 0.4f;
-								RenderTarget.FillRectangle(rect, forBrush);
+								ntlBrush.Opacity = (bottomAreaGradient) ? (float)((0.4f / maxVol) * Math.Abs(currBarItem.vol)) : 0.4f;
+								RenderTarget.FillRectangle(rect, ntlBrush);
 							}
 						}
 					}
@@ -4694,11 +4713,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			currBarItem	= null;
 			
 			/// ---
-			
-			bckBrush.Dispose();
-			forBrush.Dispose();
-			askBrush.Dispose();
-			bidBrush.Dispose();
 			
 			RenderTarget.AntialiasMode = oldAntialiasMode;
 		}
