@@ -619,6 +619,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		private SharpDX.Direct2D1.Brush askBrush;
 		private SharpDX.Direct2D1.Brush bidBrush;
 		
+		private ChartScale cScale;
+		
 		//Stopwatch sw = new Stopwatch();
 		/*
 		sw.Reset();
@@ -744,8 +746,14 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				
 				rBarWidth	 = 3.0;
 				rBarDistance = 9f;
+				rScaleFixed  = false;
+				rScaleMax 	 = 0.0;
+				rScaleMin 	 = 0.0;
 				fBarWidth	 = 1.0;
 				fBarDistance = 67f;
+				fScaleFixed  = false;
+				fScaleMax 	 = 0.0;
+				fScaleMin 	 = 0.0;
 				
 				/// ---
 				
@@ -910,25 +918,54 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				showFootprint = false;
 				topMenuItem3SubItem1.Header = "Show";
 				
-				if(footprintDisplayType == FPV2FootprintDisplayType.Profile)
-				{
-					fBarWidth = ChartControl.BarWidth;
-					fBarDistance = ChartControl.Properties.BarDistance;
-				}
+				fBarWidth 	 = ChartControl.BarWidth;
+				fBarDistance = ChartControl.Properties.BarDistance;
+				fScaleFixed  = (cScale.Properties.YAxisRangeType == YAxisRangeType.Fixed) ? true : false;
+				fScaleMin 	 = cScale.Properties.FixedScaleMin;
+				fScaleMax 	 = cScale.Properties.FixedScaleMax;
 
 				ChartControl.BarWidth = rBarWidth;
 				ChartControl.Properties.BarDistance = rBarDistance;
+				
+				if(rScaleFixed)
+				{
+					cScale.Properties.YAxisRangeType = YAxisRangeType.Fixed;
+					cScale.Properties.FixedScaleMin = rScaleMin;
+					cScale.Properties.FixedScaleMax = rScaleMax;
+				}
+				else
+				{
+					cScale.Properties.YAxisRangeType = YAxisRangeType.Automatic;
+					cScale.Properties.FixedScaleMin = 0.0;
+					cScale.Properties.FixedScaleMax = 0.0;
+				}
 			}
 			else
 			{
 				showFootprint = true;
 				topMenuItem3SubItem1.Header = "Hide";
 
-				rBarWidth = ChartControl.BarWidth;
+				rBarWidth 	 = ChartControl.BarWidth;
 				rBarDistance = ChartControl.Properties.BarDistance;
+				rScaleFixed  = (cScale.Properties.YAxisRangeType == YAxisRangeType.Fixed) ? true : false;
+				rScaleMin 	 = cScale.Properties.FixedScaleMin;
+				rScaleMax 	 = cScale.Properties.FixedScaleMax;
 				
 				ChartControl.BarWidth = fBarWidth;
 				ChartControl.Properties.BarDistance = fBarDistance;
+				
+				if(fScaleFixed)
+				{
+					cScale.Properties.YAxisRangeType = YAxisRangeType.Fixed;
+					cScale.Properties.FixedScaleMin = fScaleMin;
+					cScale.Properties.FixedScaleMax = fScaleMax;
+				}
+				else
+				{
+					cScale.Properties.YAxisRangeType = YAxisRangeType.Automatic;
+					cScale.Properties.FixedScaleMin = 0.0;
+					cScale.Properties.FixedScaleMax = 0.0;
+				}
 			}
 			
 			topMenuItem3SubItem2.IsEnabled = showFootprint;
@@ -938,7 +975,30 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			topMenuItem3SubItem6.IsEnabled = showFootprint;
 			topMenuItem3SubItem7.IsEnabled = showFootprint;
 			topMenuItem3SubItem8.IsEnabled = showFootprint;
-
+			
+			// ---
+			
+			NTWindow ntWindow = (NTWindow)Window.GetWindow(ChartControl.Parent);
+			System.Windows.Controls.TabControl tabControl = ntWindow.FindFirst("ChartWindowTabControl") as System.Windows.Controls.TabControl;
+			
+			foreach(System.Windows.Controls.TabItem tabItem in tabControl.Items)
+			{
+				ChartControl tabChartControl = (tabItem.Content as ChartTab).ChartControl;
+				
+				if(tabItem.IsSelected)
+				{
+					foreach(System.Windows.Controls.Button fixedScaleButton in tabChartControl.Children.OfType<System.Windows.Controls.Button>())
+					{
+						if(fixedScaleButton.Content.ToString() == "F")
+						{
+							fixedScaleButton.Visibility = (cScale.Properties.YAxisRangeType == YAxisRangeType.Fixed) ? Visibility.Visible : Visibility.Hidden;
+						}
+					}
+				}
+			}
+			
+			// ---
+			
 			refreshChart();
 			
 			forceRefresh = true;
@@ -1346,23 +1406,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			footprintDisplayType = (footprintDisplayType == FPV2FootprintDisplayType.Profile) ? FPV2FootprintDisplayType.Numbers : FPV2FootprintDisplayType.Profile;
 			topMenuItem3SubItem2.Header = (footprintDisplayType == FPV2FootprintDisplayType.Profile) ? "Switch to Numbers" : "Switch to Profile";
 			
-			if(footprintDisplayType == FPV2FootprintDisplayType.Numbers)
-			{
-				fBarWidth = ChartControl.BarWidth;
-				fBarDistance = ChartControl.Properties.BarDistance;
-				
-				topMenuItem3SubItem7.Visibility = Visibility.Visible;
-				topMenuItem3SubItem8.Visibility = Visibility.Visible;
-			}
-			if(footprintDisplayType == FPV2FootprintDisplayType.Profile)
-			{
-				ChartControl.BarWidth = fBarWidth;
-				ChartControl.Properties.BarDistance = fBarDistance;
-				
-				topMenuItem3SubItem7.Visibility = Visibility.Collapsed;
-				topMenuItem3SubItem8.Visibility = Visibility.Collapsed;
-			}
-			
 			ForceRefresh();
 		}
 		
@@ -1454,6 +1497,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		protected override void OnMarketData(MarketDataEventArgs marketDataUpdate)
 		{
 			if(!rdy) { return; }
+			if(BarItems[0] == null) { return; }
 			if(CurrentBars[0] == null) { return; }
 			
 			try
@@ -1567,6 +1611,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						}
 					}
 				}
+				
+				
 				
 				if(showTapeStrip && TapeStripItems.Count > tapeStripMaxItems)
 				{
@@ -1898,12 +1944,14 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		
 		/// getTextSze
 		///
-		private double getTextSize(ChartScale chartScale)
+		private double getTextSize(ChartScale chartScale, int cellWidth)
 		{
 			if(footprintDisplayType == FPV2FootprintDisplayType.Profile)
 			{
 				return ChartControl.Properties.LabelFont.Size;
 			}
+			
+			// check height
 			
 			float  y1 = 0f;
 			float  y2 = 0f;
@@ -1919,22 +1967,13 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				ts = (Math.Abs(y1 - y2) < ts) ? Math.Abs(y1 - y2) : ts;
 			}
 			
-			return (double)Math.Min(Math.Floor(ts*0.5), ls);
-		}
-		
-		/// getCellWidth
-		///
-		private int getCellWidth(double fontSize)
-		{
-			if(footprintDisplayType == FPV2FootprintDisplayType.Profile)
-			{
-				return (int)Math.Round((ChartControl.Properties.BarDistance - (barHalfWidth * 2) - 5) / 2);
-			}
+			// check width
 			
 			BarItem currBarItem;
 			
+			double fontSize = 0;
 			double maxValue = 0.0;
-			float  maxWidth = 0f;
+			float  maxWidth = float.MaxValue;
 			
 			for(int i=ChartBars.ToIndex;i>=ChartBars.FromIndex;i--)
 			{
@@ -1957,20 +1996,52 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				}
 			}
 			
+			fontSize = (double)Math.Min(Math.Floor(ts*0.5), ls);
+			
 			if(maxValue > 0.0)
 			{
-				SimpleFont sf = new SimpleFont("Consolas", fontSize){ Bold = true };
-				TextFormat tf = sf.ToDirectWriteTextFormat();
-				TextLayout tl = new SharpDX.DirectWrite.TextLayout(Core.Globals.DirectWriteFactory, maxValue.ToString(), tf, ChartPanel.W, ChartPanel.H);
+				while(maxWidth > (float)(cellWidth - 10f))
+				{
+					SimpleFont sf = new SimpleFont("Consolas", fontSize){ Bold = true };
+					TextFormat tf = sf.ToDirectWriteTextFormat();
+					TextLayout tl = new SharpDX.DirectWrite.TextLayout(Core.Globals.DirectWriteFactory, maxValue.ToString(), tf, ChartPanel.W, ChartPanel.H);
+					
+					maxWidth = tl.Metrics.Width;
+					
+					sf = null;
+					tf.Dispose();
+					tl.Dispose();
+					
+					fontSize = fontSize -1;
+				}
 				
-				maxWidth = tl.Metrics.Width;
-				
-				sf = null;
-				tf.Dispose();
-				tl.Dispose();
 			}
 			
-			return (int)Math.Round(maxWidth * 1.5);
+			return fontSize;
+		}
+		
+		/// getCellWidth
+		///
+		private int getCellWidth()
+		{
+			if(footprintDisplayType == FPV2FootprintDisplayType.Profile)
+			{
+				return (int)Math.Round((ChartControl.Properties.BarDistance - (barHalfWidth * 2) - 5) / 2);
+			}
+			
+			if(footprintDisplayType == FPV2FootprintDisplayType.Numbers)
+			{
+				if(footprintDeltaProfile)
+				{
+					return (int)Math.Round((ChartControl.Properties.BarDistance - (barHalfWidth * 2) - 7) / 3);
+				}
+				else
+				{
+					return (int)Math.Round((ChartControl.Properties.BarDistance - (barHalfWidth * 2) - 5) / 2);
+				}
+			}
+			
+			return 0;
 		}
 		
 		#endregion
@@ -2077,6 +2148,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			
 			try
 			{
+				cScale = chartScale;
 				scrollFixedScale(chartScale);
 				
 				/// ---
@@ -2084,8 +2156,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				barFullWidth = chartControl.GetBarPaintWidth(ChartBars);
 				barHalfWidth = ((barFullWidth - 1) / 2) + 2;
 				
-				dTextSize = (showFootprint) ? getTextSize(chartScale) : ChartControl.Properties.LabelFont.Size;
-				cellWidth = (showFootprint) ? getCellWidth(dTextSize) : 0;
+				cellWidth = (showFootprint) ? getCellWidth() : 0;
+				dTextSize = (showFootprint) ? getTextSize(chartScale, cellWidth) : ChartControl.Properties.LabelFont.Size;
 				
 				/// ---
 				
@@ -3262,18 +3334,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		{
 			if(!showFootprint) { return; }
 			
-			int barDistance  = (int)(((cellWidth + barHalfWidth) * 2) + 5);
-				barDistance += (footprintDisplayType == FPV2FootprintDisplayType.Numbers && footprintDeltaProfile) ? (cellWidth + 2) : 0;
-			
-			/// ---
-			
-			if(footprintDisplayType == FPV2FootprintDisplayType.Numbers && chartControl.Properties.BarDistance != barDistance)
-			{
-				chartControl.Properties.BarDistance = barDistance;
-			}
-			
-			/// ---
-			
 			SharpDX.Direct2D1.AntialiasMode oldAntialiasMode = RenderTarget.AntialiasMode;
 			RenderTarget.AntialiasMode = SharpDX.Direct2D1.AntialiasMode.Aliased;
 			
@@ -3307,8 +3367,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			float  opac = oRng;
 			
 			TextLayout tl;
-			
-			ChartPanel chartPanel = chartControl.ChartPanels[chartScale.PanelIndex];
 			
 			BarItem currBarItem;
 			
@@ -3663,7 +3721,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						
 						/// ---
 						
-						vec1.X = rect.X + 2f;
+						vec1.X = rect.X + 4f;
 						vec1.Y = rect.Y - 1f;
 						
 						/// ---
@@ -3905,7 +3963,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						
 						/// ---
 						
-						vec1.X = rect.X - 3f;
+						vec1.X = rect.X - 5f;
 						vec1.Y = rect.Y - 1f;
 						
 						/// ---
@@ -3948,7 +4006,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			
 			/// ---
 			
-			chartPanel	= null;
 			currBarItem	= null;
 			
 			/// ---
@@ -5240,8 +5297,32 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		/// ---
 		
 		[NinjaScriptProperty]
+		[ReadOnly(true)]
+		[Display(Name = "Regular Scale Fixed", GroupName = "Misc", Order = 2)]
+		public bool rScaleFixed
+		{ get; set; }
+		
+		/// ---
+		
+		[NinjaScriptProperty]
         [ReadOnly(true)]
-        [Display(Name = "Footprint Bar Width", GroupName = "Misc", Order = 2)]
+        [Display(Name = "Regular Scale Max", GroupName = "Misc", Order = 3)]
+        public double rScaleMax
+        { get; set; }
+		
+		/// ---
+		
+		[NinjaScriptProperty]
+        [ReadOnly(true)]
+        [Display(Name = "Regular Scale Min", GroupName = "Misc", Order = 4)]
+        public double rScaleMin
+        { get; set; }
+		
+		/// ---
+		
+		[NinjaScriptProperty]
+        [ReadOnly(true)]
+        [Display(Name = "Footprint Bar Width", GroupName = "Misc", Order = 5)]
         public double fBarWidth
         { get; set; }
 		
@@ -5249,8 +5330,32 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		
 		[NinjaScriptProperty]
         [ReadOnly(true)]
-        [Display(Name = "Footprint Bar Distance", GroupName = "Misc", Order = 3)]
+        [Display(Name = "Footprint Bar Distance", GroupName = "Misc", Order = 6)]
         public float fBarDistance
+        { get; set; }
+		
+		/// ---
+		
+		[NinjaScriptProperty]
+		[ReadOnly(true)]
+		[Display(Name = "Footprint Scale Fixed", GroupName = "Misc", Order = 7)]
+		public bool fScaleFixed
+		{ get; set; }
+		
+		/// ---
+		
+		[NinjaScriptProperty]
+        [ReadOnly(true)]
+        [Display(Name = "Footprint Scale Max", GroupName = "Misc", Order = 8)]
+        public double fScaleMax
+        { get; set; }
+		
+		/// ---
+		
+		[NinjaScriptProperty]
+        [ReadOnly(true)]
+        [Display(Name = "Footprint Scale Min", GroupName = "Misc", Order = 9)]
+        public double fScaleMin
         { get; set; }
 		
 		#endregion
@@ -5290,18 +5395,18 @@ namespace NinjaTrader.NinjaScript.Indicators
 	public partial class Indicator : NinjaTrader.Gui.NinjaScript.IndicatorRenderBase
 	{
 		private Infinity.FootPrintV2[] cacheFootPrintV2;
-		public Infinity.FootPrintV2 FootPrintV2(int rightMargin, bool showClose, bool paintBars, bool prevProfileShow, int prevProfileWidth, bool prevProfileGradient, bool prevProfileValueArea, bool prevProfileExtendVa, bool prevProfileShowDelta, bool prevProfileBar, bool currProfileShow, int currProfileWidth, bool currProfileGradient, bool currProfileValueArea, bool currProfileExtendVa, bool currProfileShowDelta, bool currProfileBar, bool custProfileShow, int custProfileWidth, bool custProfileGradient, bool custProfileValueArea, bool custProfileExtendVa, bool custProfileShowDelta, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue, bool custProfileMap, FPV2MapDisplayType custProfileMapType, bool showFootprint, FPV2FootprintDisplayType footprintDisplayType, bool footprintImbalances, double minImbalanceRatio, bool footprintDeltaOutline, bool footprintDeltaProfile, bool footprintDeltaGradient, bool footprintGradient, bool footprintRelativeVolume, bool showBottomArea, FPV2BottomAreaType bottomAreaType, bool bottomAreaGradient, bool bottomTextDelta, bool bottomTextVolume, bool bottomTextCumulativeDelta, bool showTapeStrip, int tapeStripMaxItems, double tapeStripFilter, Brush bullishColor, Brush bearishColor, Brush neutralColor, Brush profileColor, Brush mapColor, Brush pocColor, float profileMaxOpa, float mapMaxOpa, float footprintMaxOpa, FPV2Hotkeys footprintHotKey, FPV2Hotkeys mapHotKey, double rBarWidth, float rBarDistance, double fBarWidth, float fBarDistance)
+		public Infinity.FootPrintV2 FootPrintV2(int rightMargin, bool showClose, bool paintBars, bool prevProfileShow, int prevProfileWidth, bool prevProfileGradient, bool prevProfileValueArea, bool prevProfileExtendVa, bool prevProfileShowDelta, bool prevProfileBar, bool currProfileShow, int currProfileWidth, bool currProfileGradient, bool currProfileValueArea, bool currProfileExtendVa, bool currProfileShowDelta, bool currProfileBar, bool custProfileShow, int custProfileWidth, bool custProfileGradient, bool custProfileValueArea, bool custProfileExtendVa, bool custProfileShowDelta, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue, bool custProfileMap, FPV2MapDisplayType custProfileMapType, bool showFootprint, FPV2FootprintDisplayType footprintDisplayType, bool footprintImbalances, double minImbalanceRatio, bool footprintDeltaOutline, bool footprintDeltaProfile, bool footprintDeltaGradient, bool footprintGradient, bool footprintRelativeVolume, bool showBottomArea, FPV2BottomAreaType bottomAreaType, bool bottomAreaGradient, bool bottomTextDelta, bool bottomTextVolume, bool bottomTextCumulativeDelta, bool showTapeStrip, int tapeStripMaxItems, double tapeStripFilter, Brush bullishColor, Brush bearishColor, Brush neutralColor, Brush profileColor, Brush mapColor, Brush pocColor, float profileMaxOpa, float mapMaxOpa, float footprintMaxOpa, FPV2Hotkeys footprintHotKey, FPV2Hotkeys mapHotKey, double rBarWidth, float rBarDistance, bool rScaleFixed, double rScaleMax, double rScaleMin, double fBarWidth, float fBarDistance, bool fScaleFixed, double fScaleMax, double fScaleMin)
 		{
-			return FootPrintV2(Input, rightMargin, showClose, paintBars, prevProfileShow, prevProfileWidth, prevProfileGradient, prevProfileValueArea, prevProfileExtendVa, prevProfileShowDelta, prevProfileBar, currProfileShow, currProfileWidth, currProfileGradient, currProfileValueArea, currProfileExtendVa, currProfileShowDelta, currProfileBar, custProfileShow, custProfileWidth, custProfileGradient, custProfileValueArea, custProfileExtendVa, custProfileShowDelta, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue, custProfileMap, custProfileMapType, showFootprint, footprintDisplayType, footprintImbalances, minImbalanceRatio, footprintDeltaOutline, footprintDeltaProfile, footprintDeltaGradient, footprintGradient, footprintRelativeVolume, showBottomArea, bottomAreaType, bottomAreaGradient, bottomTextDelta, bottomTextVolume, bottomTextCumulativeDelta, showTapeStrip, tapeStripMaxItems, tapeStripFilter, bullishColor, bearishColor, neutralColor, profileColor, mapColor, pocColor, profileMaxOpa, mapMaxOpa, footprintMaxOpa, footprintHotKey, mapHotKey, rBarWidth, rBarDistance, fBarWidth, fBarDistance);
+			return FootPrintV2(Input, rightMargin, showClose, paintBars, prevProfileShow, prevProfileWidth, prevProfileGradient, prevProfileValueArea, prevProfileExtendVa, prevProfileShowDelta, prevProfileBar, currProfileShow, currProfileWidth, currProfileGradient, currProfileValueArea, currProfileExtendVa, currProfileShowDelta, currProfileBar, custProfileShow, custProfileWidth, custProfileGradient, custProfileValueArea, custProfileExtendVa, custProfileShowDelta, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue, custProfileMap, custProfileMapType, showFootprint, footprintDisplayType, footprintImbalances, minImbalanceRatio, footprintDeltaOutline, footprintDeltaProfile, footprintDeltaGradient, footprintGradient, footprintRelativeVolume, showBottomArea, bottomAreaType, bottomAreaGradient, bottomTextDelta, bottomTextVolume, bottomTextCumulativeDelta, showTapeStrip, tapeStripMaxItems, tapeStripFilter, bullishColor, bearishColor, neutralColor, profileColor, mapColor, pocColor, profileMaxOpa, mapMaxOpa, footprintMaxOpa, footprintHotKey, mapHotKey, rBarWidth, rBarDistance, rScaleFixed, rScaleMax, rScaleMin, fBarWidth, fBarDistance, fScaleFixed, fScaleMax, fScaleMin);
 		}
 
-		public Infinity.FootPrintV2 FootPrintV2(ISeries<double> input, int rightMargin, bool showClose, bool paintBars, bool prevProfileShow, int prevProfileWidth, bool prevProfileGradient, bool prevProfileValueArea, bool prevProfileExtendVa, bool prevProfileShowDelta, bool prevProfileBar, bool currProfileShow, int currProfileWidth, bool currProfileGradient, bool currProfileValueArea, bool currProfileExtendVa, bool currProfileShowDelta, bool currProfileBar, bool custProfileShow, int custProfileWidth, bool custProfileGradient, bool custProfileValueArea, bool custProfileExtendVa, bool custProfileShowDelta, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue, bool custProfileMap, FPV2MapDisplayType custProfileMapType, bool showFootprint, FPV2FootprintDisplayType footprintDisplayType, bool footprintImbalances, double minImbalanceRatio, bool footprintDeltaOutline, bool footprintDeltaProfile, bool footprintDeltaGradient, bool footprintGradient, bool footprintRelativeVolume, bool showBottomArea, FPV2BottomAreaType bottomAreaType, bool bottomAreaGradient, bool bottomTextDelta, bool bottomTextVolume, bool bottomTextCumulativeDelta, bool showTapeStrip, int tapeStripMaxItems, double tapeStripFilter, Brush bullishColor, Brush bearishColor, Brush neutralColor, Brush profileColor, Brush mapColor, Brush pocColor, float profileMaxOpa, float mapMaxOpa, float footprintMaxOpa, FPV2Hotkeys footprintHotKey, FPV2Hotkeys mapHotKey, double rBarWidth, float rBarDistance, double fBarWidth, float fBarDistance)
+		public Infinity.FootPrintV2 FootPrintV2(ISeries<double> input, int rightMargin, bool showClose, bool paintBars, bool prevProfileShow, int prevProfileWidth, bool prevProfileGradient, bool prevProfileValueArea, bool prevProfileExtendVa, bool prevProfileShowDelta, bool prevProfileBar, bool currProfileShow, int currProfileWidth, bool currProfileGradient, bool currProfileValueArea, bool currProfileExtendVa, bool currProfileShowDelta, bool currProfileBar, bool custProfileShow, int custProfileWidth, bool custProfileGradient, bool custProfileValueArea, bool custProfileExtendVa, bool custProfileShowDelta, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue, bool custProfileMap, FPV2MapDisplayType custProfileMapType, bool showFootprint, FPV2FootprintDisplayType footprintDisplayType, bool footprintImbalances, double minImbalanceRatio, bool footprintDeltaOutline, bool footprintDeltaProfile, bool footprintDeltaGradient, bool footprintGradient, bool footprintRelativeVolume, bool showBottomArea, FPV2BottomAreaType bottomAreaType, bool bottomAreaGradient, bool bottomTextDelta, bool bottomTextVolume, bool bottomTextCumulativeDelta, bool showTapeStrip, int tapeStripMaxItems, double tapeStripFilter, Brush bullishColor, Brush bearishColor, Brush neutralColor, Brush profileColor, Brush mapColor, Brush pocColor, float profileMaxOpa, float mapMaxOpa, float footprintMaxOpa, FPV2Hotkeys footprintHotKey, FPV2Hotkeys mapHotKey, double rBarWidth, float rBarDistance, bool rScaleFixed, double rScaleMax, double rScaleMin, double fBarWidth, float fBarDistance, bool fScaleFixed, double fScaleMax, double fScaleMin)
 		{
 			if (cacheFootPrintV2 != null)
 				for (int idx = 0; idx < cacheFootPrintV2.Length; idx++)
-					if (cacheFootPrintV2[idx] != null && cacheFootPrintV2[idx].rightMargin == rightMargin && cacheFootPrintV2[idx].showClose == showClose && cacheFootPrintV2[idx].paintBars == paintBars && cacheFootPrintV2[idx].prevProfileShow == prevProfileShow && cacheFootPrintV2[idx].prevProfileWidth == prevProfileWidth && cacheFootPrintV2[idx].prevProfileGradient == prevProfileGradient && cacheFootPrintV2[idx].prevProfileValueArea == prevProfileValueArea && cacheFootPrintV2[idx].prevProfileExtendVa == prevProfileExtendVa && cacheFootPrintV2[idx].prevProfileShowDelta == prevProfileShowDelta && cacheFootPrintV2[idx].prevProfileBar == prevProfileBar && cacheFootPrintV2[idx].currProfileShow == currProfileShow && cacheFootPrintV2[idx].currProfileWidth == currProfileWidth && cacheFootPrintV2[idx].currProfileGradient == currProfileGradient && cacheFootPrintV2[idx].currProfileValueArea == currProfileValueArea && cacheFootPrintV2[idx].currProfileExtendVa == currProfileExtendVa && cacheFootPrintV2[idx].currProfileShowDelta == currProfileShowDelta && cacheFootPrintV2[idx].currProfileBar == currProfileBar && cacheFootPrintV2[idx].custProfileShow == custProfileShow && cacheFootPrintV2[idx].custProfileWidth == custProfileWidth && cacheFootPrintV2[idx].custProfileGradient == custProfileGradient && cacheFootPrintV2[idx].custProfileValueArea == custProfileValueArea && cacheFootPrintV2[idx].custProfileExtendVa == custProfileExtendVa && cacheFootPrintV2[idx].custProfileShowDelta == custProfileShowDelta && cacheFootPrintV2[idx].custProfilePctValue == custProfilePctValue && cacheFootPrintV2[idx].custProfileBarValue == custProfileBarValue && cacheFootPrintV2[idx].custProfileVolValue == custProfileVolValue && cacheFootPrintV2[idx].custProfileRngValue == custProfileRngValue && cacheFootPrintV2[idx].custProfileMap == custProfileMap && cacheFootPrintV2[idx].custProfileMapType == custProfileMapType && cacheFootPrintV2[idx].showFootprint == showFootprint && cacheFootPrintV2[idx].footprintDisplayType == footprintDisplayType && cacheFootPrintV2[idx].footprintImbalances == footprintImbalances && cacheFootPrintV2[idx].minImbalanceRatio == minImbalanceRatio && cacheFootPrintV2[idx].footprintDeltaOutline == footprintDeltaOutline && cacheFootPrintV2[idx].footprintDeltaProfile == footprintDeltaProfile && cacheFootPrintV2[idx].footprintDeltaGradient == footprintDeltaGradient && cacheFootPrintV2[idx].footprintGradient == footprintGradient && cacheFootPrintV2[idx].footprintRelativeVolume == footprintRelativeVolume && cacheFootPrintV2[idx].showBottomArea == showBottomArea && cacheFootPrintV2[idx].bottomAreaType == bottomAreaType && cacheFootPrintV2[idx].bottomAreaGradient == bottomAreaGradient && cacheFootPrintV2[idx].bottomTextDelta == bottomTextDelta && cacheFootPrintV2[idx].bottomTextVolume == bottomTextVolume && cacheFootPrintV2[idx].bottomTextCumulativeDelta == bottomTextCumulativeDelta && cacheFootPrintV2[idx].showTapeStrip == showTapeStrip && cacheFootPrintV2[idx].tapeStripMaxItems == tapeStripMaxItems && cacheFootPrintV2[idx].tapeStripFilter == tapeStripFilter && cacheFootPrintV2[idx].bullishColor == bullishColor && cacheFootPrintV2[idx].bearishColor == bearishColor && cacheFootPrintV2[idx].neutralColor == neutralColor && cacheFootPrintV2[idx].profileColor == profileColor && cacheFootPrintV2[idx].mapColor == mapColor && cacheFootPrintV2[idx].pocColor == pocColor && cacheFootPrintV2[idx].profileMaxOpa == profileMaxOpa && cacheFootPrintV2[idx].mapMaxOpa == mapMaxOpa && cacheFootPrintV2[idx].footprintMaxOpa == footprintMaxOpa && cacheFootPrintV2[idx].footprintHotKey == footprintHotKey && cacheFootPrintV2[idx].mapHotKey == mapHotKey && cacheFootPrintV2[idx].rBarWidth == rBarWidth && cacheFootPrintV2[idx].rBarDistance == rBarDistance && cacheFootPrintV2[idx].fBarWidth == fBarWidth && cacheFootPrintV2[idx].fBarDistance == fBarDistance && cacheFootPrintV2[idx].EqualsInput(input))
+					if (cacheFootPrintV2[idx] != null && cacheFootPrintV2[idx].rightMargin == rightMargin && cacheFootPrintV2[idx].showClose == showClose && cacheFootPrintV2[idx].paintBars == paintBars && cacheFootPrintV2[idx].prevProfileShow == prevProfileShow && cacheFootPrintV2[idx].prevProfileWidth == prevProfileWidth && cacheFootPrintV2[idx].prevProfileGradient == prevProfileGradient && cacheFootPrintV2[idx].prevProfileValueArea == prevProfileValueArea && cacheFootPrintV2[idx].prevProfileExtendVa == prevProfileExtendVa && cacheFootPrintV2[idx].prevProfileShowDelta == prevProfileShowDelta && cacheFootPrintV2[idx].prevProfileBar == prevProfileBar && cacheFootPrintV2[idx].currProfileShow == currProfileShow && cacheFootPrintV2[idx].currProfileWidth == currProfileWidth && cacheFootPrintV2[idx].currProfileGradient == currProfileGradient && cacheFootPrintV2[idx].currProfileValueArea == currProfileValueArea && cacheFootPrintV2[idx].currProfileExtendVa == currProfileExtendVa && cacheFootPrintV2[idx].currProfileShowDelta == currProfileShowDelta && cacheFootPrintV2[idx].currProfileBar == currProfileBar && cacheFootPrintV2[idx].custProfileShow == custProfileShow && cacheFootPrintV2[idx].custProfileWidth == custProfileWidth && cacheFootPrintV2[idx].custProfileGradient == custProfileGradient && cacheFootPrintV2[idx].custProfileValueArea == custProfileValueArea && cacheFootPrintV2[idx].custProfileExtendVa == custProfileExtendVa && cacheFootPrintV2[idx].custProfileShowDelta == custProfileShowDelta && cacheFootPrintV2[idx].custProfilePctValue == custProfilePctValue && cacheFootPrintV2[idx].custProfileBarValue == custProfileBarValue && cacheFootPrintV2[idx].custProfileVolValue == custProfileVolValue && cacheFootPrintV2[idx].custProfileRngValue == custProfileRngValue && cacheFootPrintV2[idx].custProfileMap == custProfileMap && cacheFootPrintV2[idx].custProfileMapType == custProfileMapType && cacheFootPrintV2[idx].showFootprint == showFootprint && cacheFootPrintV2[idx].footprintDisplayType == footprintDisplayType && cacheFootPrintV2[idx].footprintImbalances == footprintImbalances && cacheFootPrintV2[idx].minImbalanceRatio == minImbalanceRatio && cacheFootPrintV2[idx].footprintDeltaOutline == footprintDeltaOutline && cacheFootPrintV2[idx].footprintDeltaProfile == footprintDeltaProfile && cacheFootPrintV2[idx].footprintDeltaGradient == footprintDeltaGradient && cacheFootPrintV2[idx].footprintGradient == footprintGradient && cacheFootPrintV2[idx].footprintRelativeVolume == footprintRelativeVolume && cacheFootPrintV2[idx].showBottomArea == showBottomArea && cacheFootPrintV2[idx].bottomAreaType == bottomAreaType && cacheFootPrintV2[idx].bottomAreaGradient == bottomAreaGradient && cacheFootPrintV2[idx].bottomTextDelta == bottomTextDelta && cacheFootPrintV2[idx].bottomTextVolume == bottomTextVolume && cacheFootPrintV2[idx].bottomTextCumulativeDelta == bottomTextCumulativeDelta && cacheFootPrintV2[idx].showTapeStrip == showTapeStrip && cacheFootPrintV2[idx].tapeStripMaxItems == tapeStripMaxItems && cacheFootPrintV2[idx].tapeStripFilter == tapeStripFilter && cacheFootPrintV2[idx].bullishColor == bullishColor && cacheFootPrintV2[idx].bearishColor == bearishColor && cacheFootPrintV2[idx].neutralColor == neutralColor && cacheFootPrintV2[idx].profileColor == profileColor && cacheFootPrintV2[idx].mapColor == mapColor && cacheFootPrintV2[idx].pocColor == pocColor && cacheFootPrintV2[idx].profileMaxOpa == profileMaxOpa && cacheFootPrintV2[idx].mapMaxOpa == mapMaxOpa && cacheFootPrintV2[idx].footprintMaxOpa == footprintMaxOpa && cacheFootPrintV2[idx].footprintHotKey == footprintHotKey && cacheFootPrintV2[idx].mapHotKey == mapHotKey && cacheFootPrintV2[idx].rBarWidth == rBarWidth && cacheFootPrintV2[idx].rBarDistance == rBarDistance && cacheFootPrintV2[idx].rScaleFixed == rScaleFixed && cacheFootPrintV2[idx].rScaleMax == rScaleMax && cacheFootPrintV2[idx].rScaleMin == rScaleMin && cacheFootPrintV2[idx].fBarWidth == fBarWidth && cacheFootPrintV2[idx].fBarDistance == fBarDistance && cacheFootPrintV2[idx].fScaleFixed == fScaleFixed && cacheFootPrintV2[idx].fScaleMax == fScaleMax && cacheFootPrintV2[idx].fScaleMin == fScaleMin && cacheFootPrintV2[idx].EqualsInput(input))
 						return cacheFootPrintV2[idx];
-			return CacheIndicator<Infinity.FootPrintV2>(new Infinity.FootPrintV2(){ rightMargin = rightMargin, showClose = showClose, paintBars = paintBars, prevProfileShow = prevProfileShow, prevProfileWidth = prevProfileWidth, prevProfileGradient = prevProfileGradient, prevProfileValueArea = prevProfileValueArea, prevProfileExtendVa = prevProfileExtendVa, prevProfileShowDelta = prevProfileShowDelta, prevProfileBar = prevProfileBar, currProfileShow = currProfileShow, currProfileWidth = currProfileWidth, currProfileGradient = currProfileGradient, currProfileValueArea = currProfileValueArea, currProfileExtendVa = currProfileExtendVa, currProfileShowDelta = currProfileShowDelta, currProfileBar = currProfileBar, custProfileShow = custProfileShow, custProfileWidth = custProfileWidth, custProfileGradient = custProfileGradient, custProfileValueArea = custProfileValueArea, custProfileExtendVa = custProfileExtendVa, custProfileShowDelta = custProfileShowDelta, custProfilePctValue = custProfilePctValue, custProfileBarValue = custProfileBarValue, custProfileVolValue = custProfileVolValue, custProfileRngValue = custProfileRngValue, custProfileMap = custProfileMap, custProfileMapType = custProfileMapType, showFootprint = showFootprint, footprintDisplayType = footprintDisplayType, footprintImbalances = footprintImbalances, minImbalanceRatio = minImbalanceRatio, footprintDeltaOutline = footprintDeltaOutline, footprintDeltaProfile = footprintDeltaProfile, footprintDeltaGradient = footprintDeltaGradient, footprintGradient = footprintGradient, footprintRelativeVolume = footprintRelativeVolume, showBottomArea = showBottomArea, bottomAreaType = bottomAreaType, bottomAreaGradient = bottomAreaGradient, bottomTextDelta = bottomTextDelta, bottomTextVolume = bottomTextVolume, bottomTextCumulativeDelta = bottomTextCumulativeDelta, showTapeStrip = showTapeStrip, tapeStripMaxItems = tapeStripMaxItems, tapeStripFilter = tapeStripFilter, bullishColor = bullishColor, bearishColor = bearishColor, neutralColor = neutralColor, profileColor = profileColor, mapColor = mapColor, pocColor = pocColor, profileMaxOpa = profileMaxOpa, mapMaxOpa = mapMaxOpa, footprintMaxOpa = footprintMaxOpa, footprintHotKey = footprintHotKey, mapHotKey = mapHotKey, rBarWidth = rBarWidth, rBarDistance = rBarDistance, fBarWidth = fBarWidth, fBarDistance = fBarDistance }, input, ref cacheFootPrintV2);
+			return CacheIndicator<Infinity.FootPrintV2>(new Infinity.FootPrintV2(){ rightMargin = rightMargin, showClose = showClose, paintBars = paintBars, prevProfileShow = prevProfileShow, prevProfileWidth = prevProfileWidth, prevProfileGradient = prevProfileGradient, prevProfileValueArea = prevProfileValueArea, prevProfileExtendVa = prevProfileExtendVa, prevProfileShowDelta = prevProfileShowDelta, prevProfileBar = prevProfileBar, currProfileShow = currProfileShow, currProfileWidth = currProfileWidth, currProfileGradient = currProfileGradient, currProfileValueArea = currProfileValueArea, currProfileExtendVa = currProfileExtendVa, currProfileShowDelta = currProfileShowDelta, currProfileBar = currProfileBar, custProfileShow = custProfileShow, custProfileWidth = custProfileWidth, custProfileGradient = custProfileGradient, custProfileValueArea = custProfileValueArea, custProfileExtendVa = custProfileExtendVa, custProfileShowDelta = custProfileShowDelta, custProfilePctValue = custProfilePctValue, custProfileBarValue = custProfileBarValue, custProfileVolValue = custProfileVolValue, custProfileRngValue = custProfileRngValue, custProfileMap = custProfileMap, custProfileMapType = custProfileMapType, showFootprint = showFootprint, footprintDisplayType = footprintDisplayType, footprintImbalances = footprintImbalances, minImbalanceRatio = minImbalanceRatio, footprintDeltaOutline = footprintDeltaOutline, footprintDeltaProfile = footprintDeltaProfile, footprintDeltaGradient = footprintDeltaGradient, footprintGradient = footprintGradient, footprintRelativeVolume = footprintRelativeVolume, showBottomArea = showBottomArea, bottomAreaType = bottomAreaType, bottomAreaGradient = bottomAreaGradient, bottomTextDelta = bottomTextDelta, bottomTextVolume = bottomTextVolume, bottomTextCumulativeDelta = bottomTextCumulativeDelta, showTapeStrip = showTapeStrip, tapeStripMaxItems = tapeStripMaxItems, tapeStripFilter = tapeStripFilter, bullishColor = bullishColor, bearishColor = bearishColor, neutralColor = neutralColor, profileColor = profileColor, mapColor = mapColor, pocColor = pocColor, profileMaxOpa = profileMaxOpa, mapMaxOpa = mapMaxOpa, footprintMaxOpa = footprintMaxOpa, footprintHotKey = footprintHotKey, mapHotKey = mapHotKey, rBarWidth = rBarWidth, rBarDistance = rBarDistance, rScaleFixed = rScaleFixed, rScaleMax = rScaleMax, rScaleMin = rScaleMin, fBarWidth = fBarWidth, fBarDistance = fBarDistance, fScaleFixed = fScaleFixed, fScaleMax = fScaleMax, fScaleMin = fScaleMin }, input, ref cacheFootPrintV2);
 		}
 	}
 }
@@ -5310,14 +5415,14 @@ namespace NinjaTrader.NinjaScript.MarketAnalyzerColumns
 {
 	public partial class MarketAnalyzerColumn : MarketAnalyzerColumnBase
 	{
-		public Indicators.Infinity.FootPrintV2 FootPrintV2(int rightMargin, bool showClose, bool paintBars, bool prevProfileShow, int prevProfileWidth, bool prevProfileGradient, bool prevProfileValueArea, bool prevProfileExtendVa, bool prevProfileShowDelta, bool prevProfileBar, bool currProfileShow, int currProfileWidth, bool currProfileGradient, bool currProfileValueArea, bool currProfileExtendVa, bool currProfileShowDelta, bool currProfileBar, bool custProfileShow, int custProfileWidth, bool custProfileGradient, bool custProfileValueArea, bool custProfileExtendVa, bool custProfileShowDelta, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue, bool custProfileMap, FPV2MapDisplayType custProfileMapType, bool showFootprint, FPV2FootprintDisplayType footprintDisplayType, bool footprintImbalances, double minImbalanceRatio, bool footprintDeltaOutline, bool footprintDeltaProfile, bool footprintDeltaGradient, bool footprintGradient, bool footprintRelativeVolume, bool showBottomArea, FPV2BottomAreaType bottomAreaType, bool bottomAreaGradient, bool bottomTextDelta, bool bottomTextVolume, bool bottomTextCumulativeDelta, bool showTapeStrip, int tapeStripMaxItems, double tapeStripFilter, Brush bullishColor, Brush bearishColor, Brush neutralColor, Brush profileColor, Brush mapColor, Brush pocColor, float profileMaxOpa, float mapMaxOpa, float footprintMaxOpa, FPV2Hotkeys footprintHotKey, FPV2Hotkeys mapHotKey, double rBarWidth, float rBarDistance, double fBarWidth, float fBarDistance)
+		public Indicators.Infinity.FootPrintV2 FootPrintV2(int rightMargin, bool showClose, bool paintBars, bool prevProfileShow, int prevProfileWidth, bool prevProfileGradient, bool prevProfileValueArea, bool prevProfileExtendVa, bool prevProfileShowDelta, bool prevProfileBar, bool currProfileShow, int currProfileWidth, bool currProfileGradient, bool currProfileValueArea, bool currProfileExtendVa, bool currProfileShowDelta, bool currProfileBar, bool custProfileShow, int custProfileWidth, bool custProfileGradient, bool custProfileValueArea, bool custProfileExtendVa, bool custProfileShowDelta, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue, bool custProfileMap, FPV2MapDisplayType custProfileMapType, bool showFootprint, FPV2FootprintDisplayType footprintDisplayType, bool footprintImbalances, double minImbalanceRatio, bool footprintDeltaOutline, bool footprintDeltaProfile, bool footprintDeltaGradient, bool footprintGradient, bool footprintRelativeVolume, bool showBottomArea, FPV2BottomAreaType bottomAreaType, bool bottomAreaGradient, bool bottomTextDelta, bool bottomTextVolume, bool bottomTextCumulativeDelta, bool showTapeStrip, int tapeStripMaxItems, double tapeStripFilter, Brush bullishColor, Brush bearishColor, Brush neutralColor, Brush profileColor, Brush mapColor, Brush pocColor, float profileMaxOpa, float mapMaxOpa, float footprintMaxOpa, FPV2Hotkeys footprintHotKey, FPV2Hotkeys mapHotKey, double rBarWidth, float rBarDistance, bool rScaleFixed, double rScaleMax, double rScaleMin, double fBarWidth, float fBarDistance, bool fScaleFixed, double fScaleMax, double fScaleMin)
 		{
-			return indicator.FootPrintV2(Input, rightMargin, showClose, paintBars, prevProfileShow, prevProfileWidth, prevProfileGradient, prevProfileValueArea, prevProfileExtendVa, prevProfileShowDelta, prevProfileBar, currProfileShow, currProfileWidth, currProfileGradient, currProfileValueArea, currProfileExtendVa, currProfileShowDelta, currProfileBar, custProfileShow, custProfileWidth, custProfileGradient, custProfileValueArea, custProfileExtendVa, custProfileShowDelta, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue, custProfileMap, custProfileMapType, showFootprint, footprintDisplayType, footprintImbalances, minImbalanceRatio, footprintDeltaOutline, footprintDeltaProfile, footprintDeltaGradient, footprintGradient, footprintRelativeVolume, showBottomArea, bottomAreaType, bottomAreaGradient, bottomTextDelta, bottomTextVolume, bottomTextCumulativeDelta, showTapeStrip, tapeStripMaxItems, tapeStripFilter, bullishColor, bearishColor, neutralColor, profileColor, mapColor, pocColor, profileMaxOpa, mapMaxOpa, footprintMaxOpa, footprintHotKey, mapHotKey, rBarWidth, rBarDistance, fBarWidth, fBarDistance);
+			return indicator.FootPrintV2(Input, rightMargin, showClose, paintBars, prevProfileShow, prevProfileWidth, prevProfileGradient, prevProfileValueArea, prevProfileExtendVa, prevProfileShowDelta, prevProfileBar, currProfileShow, currProfileWidth, currProfileGradient, currProfileValueArea, currProfileExtendVa, currProfileShowDelta, currProfileBar, custProfileShow, custProfileWidth, custProfileGradient, custProfileValueArea, custProfileExtendVa, custProfileShowDelta, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue, custProfileMap, custProfileMapType, showFootprint, footprintDisplayType, footprintImbalances, minImbalanceRatio, footprintDeltaOutline, footprintDeltaProfile, footprintDeltaGradient, footprintGradient, footprintRelativeVolume, showBottomArea, bottomAreaType, bottomAreaGradient, bottomTextDelta, bottomTextVolume, bottomTextCumulativeDelta, showTapeStrip, tapeStripMaxItems, tapeStripFilter, bullishColor, bearishColor, neutralColor, profileColor, mapColor, pocColor, profileMaxOpa, mapMaxOpa, footprintMaxOpa, footprintHotKey, mapHotKey, rBarWidth, rBarDistance, rScaleFixed, rScaleMax, rScaleMin, fBarWidth, fBarDistance, fScaleFixed, fScaleMax, fScaleMin);
 		}
 
-		public Indicators.Infinity.FootPrintV2 FootPrintV2(ISeries<double> input , int rightMargin, bool showClose, bool paintBars, bool prevProfileShow, int prevProfileWidth, bool prevProfileGradient, bool prevProfileValueArea, bool prevProfileExtendVa, bool prevProfileShowDelta, bool prevProfileBar, bool currProfileShow, int currProfileWidth, bool currProfileGradient, bool currProfileValueArea, bool currProfileExtendVa, bool currProfileShowDelta, bool currProfileBar, bool custProfileShow, int custProfileWidth, bool custProfileGradient, bool custProfileValueArea, bool custProfileExtendVa, bool custProfileShowDelta, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue, bool custProfileMap, FPV2MapDisplayType custProfileMapType, bool showFootprint, FPV2FootprintDisplayType footprintDisplayType, bool footprintImbalances, double minImbalanceRatio, bool footprintDeltaOutline, bool footprintDeltaProfile, bool footprintDeltaGradient, bool footprintGradient, bool footprintRelativeVolume, bool showBottomArea, FPV2BottomAreaType bottomAreaType, bool bottomAreaGradient, bool bottomTextDelta, bool bottomTextVolume, bool bottomTextCumulativeDelta, bool showTapeStrip, int tapeStripMaxItems, double tapeStripFilter, Brush bullishColor, Brush bearishColor, Brush neutralColor, Brush profileColor, Brush mapColor, Brush pocColor, float profileMaxOpa, float mapMaxOpa, float footprintMaxOpa, FPV2Hotkeys footprintHotKey, FPV2Hotkeys mapHotKey, double rBarWidth, float rBarDistance, double fBarWidth, float fBarDistance)
+		public Indicators.Infinity.FootPrintV2 FootPrintV2(ISeries<double> input , int rightMargin, bool showClose, bool paintBars, bool prevProfileShow, int prevProfileWidth, bool prevProfileGradient, bool prevProfileValueArea, bool prevProfileExtendVa, bool prevProfileShowDelta, bool prevProfileBar, bool currProfileShow, int currProfileWidth, bool currProfileGradient, bool currProfileValueArea, bool currProfileExtendVa, bool currProfileShowDelta, bool currProfileBar, bool custProfileShow, int custProfileWidth, bool custProfileGradient, bool custProfileValueArea, bool custProfileExtendVa, bool custProfileShowDelta, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue, bool custProfileMap, FPV2MapDisplayType custProfileMapType, bool showFootprint, FPV2FootprintDisplayType footprintDisplayType, bool footprintImbalances, double minImbalanceRatio, bool footprintDeltaOutline, bool footprintDeltaProfile, bool footprintDeltaGradient, bool footprintGradient, bool footprintRelativeVolume, bool showBottomArea, FPV2BottomAreaType bottomAreaType, bool bottomAreaGradient, bool bottomTextDelta, bool bottomTextVolume, bool bottomTextCumulativeDelta, bool showTapeStrip, int tapeStripMaxItems, double tapeStripFilter, Brush bullishColor, Brush bearishColor, Brush neutralColor, Brush profileColor, Brush mapColor, Brush pocColor, float profileMaxOpa, float mapMaxOpa, float footprintMaxOpa, FPV2Hotkeys footprintHotKey, FPV2Hotkeys mapHotKey, double rBarWidth, float rBarDistance, bool rScaleFixed, double rScaleMax, double rScaleMin, double fBarWidth, float fBarDistance, bool fScaleFixed, double fScaleMax, double fScaleMin)
 		{
-			return indicator.FootPrintV2(input, rightMargin, showClose, paintBars, prevProfileShow, prevProfileWidth, prevProfileGradient, prevProfileValueArea, prevProfileExtendVa, prevProfileShowDelta, prevProfileBar, currProfileShow, currProfileWidth, currProfileGradient, currProfileValueArea, currProfileExtendVa, currProfileShowDelta, currProfileBar, custProfileShow, custProfileWidth, custProfileGradient, custProfileValueArea, custProfileExtendVa, custProfileShowDelta, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue, custProfileMap, custProfileMapType, showFootprint, footprintDisplayType, footprintImbalances, minImbalanceRatio, footprintDeltaOutline, footprintDeltaProfile, footprintDeltaGradient, footprintGradient, footprintRelativeVolume, showBottomArea, bottomAreaType, bottomAreaGradient, bottomTextDelta, bottomTextVolume, bottomTextCumulativeDelta, showTapeStrip, tapeStripMaxItems, tapeStripFilter, bullishColor, bearishColor, neutralColor, profileColor, mapColor, pocColor, profileMaxOpa, mapMaxOpa, footprintMaxOpa, footprintHotKey, mapHotKey, rBarWidth, rBarDistance, fBarWidth, fBarDistance);
+			return indicator.FootPrintV2(input, rightMargin, showClose, paintBars, prevProfileShow, prevProfileWidth, prevProfileGradient, prevProfileValueArea, prevProfileExtendVa, prevProfileShowDelta, prevProfileBar, currProfileShow, currProfileWidth, currProfileGradient, currProfileValueArea, currProfileExtendVa, currProfileShowDelta, currProfileBar, custProfileShow, custProfileWidth, custProfileGradient, custProfileValueArea, custProfileExtendVa, custProfileShowDelta, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue, custProfileMap, custProfileMapType, showFootprint, footprintDisplayType, footprintImbalances, minImbalanceRatio, footprintDeltaOutline, footprintDeltaProfile, footprintDeltaGradient, footprintGradient, footprintRelativeVolume, showBottomArea, bottomAreaType, bottomAreaGradient, bottomTextDelta, bottomTextVolume, bottomTextCumulativeDelta, showTapeStrip, tapeStripMaxItems, tapeStripFilter, bullishColor, bearishColor, neutralColor, profileColor, mapColor, pocColor, profileMaxOpa, mapMaxOpa, footprintMaxOpa, footprintHotKey, mapHotKey, rBarWidth, rBarDistance, rScaleFixed, rScaleMax, rScaleMin, fBarWidth, fBarDistance, fScaleFixed, fScaleMax, fScaleMin);
 		}
 	}
 }
@@ -5326,14 +5431,14 @@ namespace NinjaTrader.NinjaScript.Strategies
 {
 	public partial class Strategy : NinjaTrader.Gui.NinjaScript.StrategyRenderBase
 	{
-		public Indicators.Infinity.FootPrintV2 FootPrintV2(int rightMargin, bool showClose, bool paintBars, bool prevProfileShow, int prevProfileWidth, bool prevProfileGradient, bool prevProfileValueArea, bool prevProfileExtendVa, bool prevProfileShowDelta, bool prevProfileBar, bool currProfileShow, int currProfileWidth, bool currProfileGradient, bool currProfileValueArea, bool currProfileExtendVa, bool currProfileShowDelta, bool currProfileBar, bool custProfileShow, int custProfileWidth, bool custProfileGradient, bool custProfileValueArea, bool custProfileExtendVa, bool custProfileShowDelta, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue, bool custProfileMap, FPV2MapDisplayType custProfileMapType, bool showFootprint, FPV2FootprintDisplayType footprintDisplayType, bool footprintImbalances, double minImbalanceRatio, bool footprintDeltaOutline, bool footprintDeltaProfile, bool footprintDeltaGradient, bool footprintGradient, bool footprintRelativeVolume, bool showBottomArea, FPV2BottomAreaType bottomAreaType, bool bottomAreaGradient, bool bottomTextDelta, bool bottomTextVolume, bool bottomTextCumulativeDelta, bool showTapeStrip, int tapeStripMaxItems, double tapeStripFilter, Brush bullishColor, Brush bearishColor, Brush neutralColor, Brush profileColor, Brush mapColor, Brush pocColor, float profileMaxOpa, float mapMaxOpa, float footprintMaxOpa, FPV2Hotkeys footprintHotKey, FPV2Hotkeys mapHotKey, double rBarWidth, float rBarDistance, double fBarWidth, float fBarDistance)
+		public Indicators.Infinity.FootPrintV2 FootPrintV2(int rightMargin, bool showClose, bool paintBars, bool prevProfileShow, int prevProfileWidth, bool prevProfileGradient, bool prevProfileValueArea, bool prevProfileExtendVa, bool prevProfileShowDelta, bool prevProfileBar, bool currProfileShow, int currProfileWidth, bool currProfileGradient, bool currProfileValueArea, bool currProfileExtendVa, bool currProfileShowDelta, bool currProfileBar, bool custProfileShow, int custProfileWidth, bool custProfileGradient, bool custProfileValueArea, bool custProfileExtendVa, bool custProfileShowDelta, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue, bool custProfileMap, FPV2MapDisplayType custProfileMapType, bool showFootprint, FPV2FootprintDisplayType footprintDisplayType, bool footprintImbalances, double minImbalanceRatio, bool footprintDeltaOutline, bool footprintDeltaProfile, bool footprintDeltaGradient, bool footprintGradient, bool footprintRelativeVolume, bool showBottomArea, FPV2BottomAreaType bottomAreaType, bool bottomAreaGradient, bool bottomTextDelta, bool bottomTextVolume, bool bottomTextCumulativeDelta, bool showTapeStrip, int tapeStripMaxItems, double tapeStripFilter, Brush bullishColor, Brush bearishColor, Brush neutralColor, Brush profileColor, Brush mapColor, Brush pocColor, float profileMaxOpa, float mapMaxOpa, float footprintMaxOpa, FPV2Hotkeys footprintHotKey, FPV2Hotkeys mapHotKey, double rBarWidth, float rBarDistance, bool rScaleFixed, double rScaleMax, double rScaleMin, double fBarWidth, float fBarDistance, bool fScaleFixed, double fScaleMax, double fScaleMin)
 		{
-			return indicator.FootPrintV2(Input, rightMargin, showClose, paintBars, prevProfileShow, prevProfileWidth, prevProfileGradient, prevProfileValueArea, prevProfileExtendVa, prevProfileShowDelta, prevProfileBar, currProfileShow, currProfileWidth, currProfileGradient, currProfileValueArea, currProfileExtendVa, currProfileShowDelta, currProfileBar, custProfileShow, custProfileWidth, custProfileGradient, custProfileValueArea, custProfileExtendVa, custProfileShowDelta, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue, custProfileMap, custProfileMapType, showFootprint, footprintDisplayType, footprintImbalances, minImbalanceRatio, footprintDeltaOutline, footprintDeltaProfile, footprintDeltaGradient, footprintGradient, footprintRelativeVolume, showBottomArea, bottomAreaType, bottomAreaGradient, bottomTextDelta, bottomTextVolume, bottomTextCumulativeDelta, showTapeStrip, tapeStripMaxItems, tapeStripFilter, bullishColor, bearishColor, neutralColor, profileColor, mapColor, pocColor, profileMaxOpa, mapMaxOpa, footprintMaxOpa, footprintHotKey, mapHotKey, rBarWidth, rBarDistance, fBarWidth, fBarDistance);
+			return indicator.FootPrintV2(Input, rightMargin, showClose, paintBars, prevProfileShow, prevProfileWidth, prevProfileGradient, prevProfileValueArea, prevProfileExtendVa, prevProfileShowDelta, prevProfileBar, currProfileShow, currProfileWidth, currProfileGradient, currProfileValueArea, currProfileExtendVa, currProfileShowDelta, currProfileBar, custProfileShow, custProfileWidth, custProfileGradient, custProfileValueArea, custProfileExtendVa, custProfileShowDelta, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue, custProfileMap, custProfileMapType, showFootprint, footprintDisplayType, footprintImbalances, minImbalanceRatio, footprintDeltaOutline, footprintDeltaProfile, footprintDeltaGradient, footprintGradient, footprintRelativeVolume, showBottomArea, bottomAreaType, bottomAreaGradient, bottomTextDelta, bottomTextVolume, bottomTextCumulativeDelta, showTapeStrip, tapeStripMaxItems, tapeStripFilter, bullishColor, bearishColor, neutralColor, profileColor, mapColor, pocColor, profileMaxOpa, mapMaxOpa, footprintMaxOpa, footprintHotKey, mapHotKey, rBarWidth, rBarDistance, rScaleFixed, rScaleMax, rScaleMin, fBarWidth, fBarDistance, fScaleFixed, fScaleMax, fScaleMin);
 		}
 
-		public Indicators.Infinity.FootPrintV2 FootPrintV2(ISeries<double> input , int rightMargin, bool showClose, bool paintBars, bool prevProfileShow, int prevProfileWidth, bool prevProfileGradient, bool prevProfileValueArea, bool prevProfileExtendVa, bool prevProfileShowDelta, bool prevProfileBar, bool currProfileShow, int currProfileWidth, bool currProfileGradient, bool currProfileValueArea, bool currProfileExtendVa, bool currProfileShowDelta, bool currProfileBar, bool custProfileShow, int custProfileWidth, bool custProfileGradient, bool custProfileValueArea, bool custProfileExtendVa, bool custProfileShowDelta, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue, bool custProfileMap, FPV2MapDisplayType custProfileMapType, bool showFootprint, FPV2FootprintDisplayType footprintDisplayType, bool footprintImbalances, double minImbalanceRatio, bool footprintDeltaOutline, bool footprintDeltaProfile, bool footprintDeltaGradient, bool footprintGradient, bool footprintRelativeVolume, bool showBottomArea, FPV2BottomAreaType bottomAreaType, bool bottomAreaGradient, bool bottomTextDelta, bool bottomTextVolume, bool bottomTextCumulativeDelta, bool showTapeStrip, int tapeStripMaxItems, double tapeStripFilter, Brush bullishColor, Brush bearishColor, Brush neutralColor, Brush profileColor, Brush mapColor, Brush pocColor, float profileMaxOpa, float mapMaxOpa, float footprintMaxOpa, FPV2Hotkeys footprintHotKey, FPV2Hotkeys mapHotKey, double rBarWidth, float rBarDistance, double fBarWidth, float fBarDistance)
+		public Indicators.Infinity.FootPrintV2 FootPrintV2(ISeries<double> input , int rightMargin, bool showClose, bool paintBars, bool prevProfileShow, int prevProfileWidth, bool prevProfileGradient, bool prevProfileValueArea, bool prevProfileExtendVa, bool prevProfileShowDelta, bool prevProfileBar, bool currProfileShow, int currProfileWidth, bool currProfileGradient, bool currProfileValueArea, bool currProfileExtendVa, bool currProfileShowDelta, bool currProfileBar, bool custProfileShow, int custProfileWidth, bool custProfileGradient, bool custProfileValueArea, bool custProfileExtendVa, bool custProfileShowDelta, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue, bool custProfileMap, FPV2MapDisplayType custProfileMapType, bool showFootprint, FPV2FootprintDisplayType footprintDisplayType, bool footprintImbalances, double minImbalanceRatio, bool footprintDeltaOutline, bool footprintDeltaProfile, bool footprintDeltaGradient, bool footprintGradient, bool footprintRelativeVolume, bool showBottomArea, FPV2BottomAreaType bottomAreaType, bool bottomAreaGradient, bool bottomTextDelta, bool bottomTextVolume, bool bottomTextCumulativeDelta, bool showTapeStrip, int tapeStripMaxItems, double tapeStripFilter, Brush bullishColor, Brush bearishColor, Brush neutralColor, Brush profileColor, Brush mapColor, Brush pocColor, float profileMaxOpa, float mapMaxOpa, float footprintMaxOpa, FPV2Hotkeys footprintHotKey, FPV2Hotkeys mapHotKey, double rBarWidth, float rBarDistance, bool rScaleFixed, double rScaleMax, double rScaleMin, double fBarWidth, float fBarDistance, bool fScaleFixed, double fScaleMax, double fScaleMin)
 		{
-			return indicator.FootPrintV2(input, rightMargin, showClose, paintBars, prevProfileShow, prevProfileWidth, prevProfileGradient, prevProfileValueArea, prevProfileExtendVa, prevProfileShowDelta, prevProfileBar, currProfileShow, currProfileWidth, currProfileGradient, currProfileValueArea, currProfileExtendVa, currProfileShowDelta, currProfileBar, custProfileShow, custProfileWidth, custProfileGradient, custProfileValueArea, custProfileExtendVa, custProfileShowDelta, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue, custProfileMap, custProfileMapType, showFootprint, footprintDisplayType, footprintImbalances, minImbalanceRatio, footprintDeltaOutline, footprintDeltaProfile, footprintDeltaGradient, footprintGradient, footprintRelativeVolume, showBottomArea, bottomAreaType, bottomAreaGradient, bottomTextDelta, bottomTextVolume, bottomTextCumulativeDelta, showTapeStrip, tapeStripMaxItems, tapeStripFilter, bullishColor, bearishColor, neutralColor, profileColor, mapColor, pocColor, profileMaxOpa, mapMaxOpa, footprintMaxOpa, footprintHotKey, mapHotKey, rBarWidth, rBarDistance, fBarWidth, fBarDistance);
+			return indicator.FootPrintV2(input, rightMargin, showClose, paintBars, prevProfileShow, prevProfileWidth, prevProfileGradient, prevProfileValueArea, prevProfileExtendVa, prevProfileShowDelta, prevProfileBar, currProfileShow, currProfileWidth, currProfileGradient, currProfileValueArea, currProfileExtendVa, currProfileShowDelta, currProfileBar, custProfileShow, custProfileWidth, custProfileGradient, custProfileValueArea, custProfileExtendVa, custProfileShowDelta, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue, custProfileMap, custProfileMapType, showFootprint, footprintDisplayType, footprintImbalances, minImbalanceRatio, footprintDeltaOutline, footprintDeltaProfile, footprintDeltaGradient, footprintGradient, footprintRelativeVolume, showBottomArea, bottomAreaType, bottomAreaGradient, bottomTextDelta, bottomTextVolume, bottomTextCumulativeDelta, showTapeStrip, tapeStripMaxItems, tapeStripFilter, bullishColor, bearishColor, neutralColor, profileColor, mapColor, pocColor, profileMaxOpa, mapMaxOpa, footprintMaxOpa, footprintHotKey, mapHotKey, rBarWidth, rBarDistance, rScaleFixed, rScaleMax, rScaleMin, fBarWidth, fBarDistance, fScaleFixed, fScaleMax, fScaleMin);
 		}
 	}
 }
