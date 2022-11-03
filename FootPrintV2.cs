@@ -987,12 +987,25 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				
 				if(tabItem.IsSelected)
 				{
-					foreach(System.Windows.Controls.Button fixedScaleButton in tabChartControl.Children.OfType<System.Windows.Controls.Button>())
+					if(ScaleJustification == ScaleJustification.Left)
 					{
-						if(fixedScaleButton.Content.ToString() == "F")
+						try
 						{
+							System.Windows.Controls.Button fixedScaleButton = tabChartControl.Children.OfType<System.Windows.Controls.Button>().Where(b => b.Content.ToString() == "F").First();
+						
 							fixedScaleButton.Visibility = (cScale.Properties.YAxisRangeType == YAxisRangeType.Fixed) ? Visibility.Visible : Visibility.Hidden;
 						}
+						catch(Exception e) {}
+					}
+					if(ScaleJustification == ScaleJustification.Right)
+					{
+						try
+						{
+							System.Windows.Controls.Button fixedScaleButton = tabChartControl.Children.OfType<System.Windows.Controls.Button>().Where(b => b.Content.ToString() == "F").Last();
+						
+							fixedScaleButton.Visibility = (cScale.Properties.YAxisRangeType == YAxisRangeType.Fixed) ? Visibility.Visible : Visibility.Hidden;
+						}
+						catch(Exception e) {}
 					}
 				}
 			}
