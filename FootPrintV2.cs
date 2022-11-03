@@ -2242,6 +2242,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					double prcRng = 0.0;
 					double upperM = 0.0;
 					double lowerM = 0.0;
+					double currCl = Bars.GetClose(ChartBars.ToIndex);
 					double currHi = Bars.GetHigh(ChartBars.ToIndex);
 					double currLo = Bars.GetLow(ChartBars.ToIndex);
 					double prcDif = 0.0;
@@ -2252,7 +2253,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					upperM = (prcRng / 100.0) * chartScale.Properties.AutoScaleMarginUpper;
 					lowerM = (prcRng / 100.0) * chartScale.Properties.AutoScaleMarginLower;
 					
-					if(currHi > chartScale.MaxValue - upperM)
+					if(currCl > chartScale.MaxValue - upperM)
 					{
 						prcDif = currHi - (chartScale.MaxValue - upperM);
 						chartScale.Properties.FixedScaleMax = chartScale.Properties.FixedScaleMax + prcDif;
@@ -2261,7 +2262,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						refreshChart();
 					}
 					
-					if(currLo < chartScale.MinValue + lowerM)
+					if(currCl < chartScale.MinValue + lowerM)
 					{
 						prcDif = chartScale.MinValue + lowerM - currLo;
 						chartScale.Properties.FixedScaleMax = chartScale.Properties.FixedScaleMax - prcDif;
@@ -3609,9 +3610,9 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					
 					if(footprintDisplayType == FPV2FootprintDisplayType.Numbers)
 					{
-						opac = (footprintGradient) ? (float)Math.Round((oRng / maxVol) * ri.Value.ask, 5) + 0.04f : 0.15f;
-						opac = (!footprintGradient && ri.Key == poc) ? opac + 0.3f : opac;
-						opac = (i == ChartBars.ToIndex && GetCurrentAsk() == ri.Key && ri.Key == prc) ? opac + 0.15f : opac;
+						opac = (footprintGradient) ? (float)Math.Round((oRng / maxVol) * ri.Value.ask, 5) : 0.15f;
+						opac = (!footprintGradient && ri.Key == poc) ? opac + 0.25f : opac;
+						opac = (!footprintGradient && i == ChartBars.ToIndex && GetCurrentAsk() == ri.Key && ri.Key == prc) ? opac + 0.1f : opac;
 						
 						proBrush.Opacity = opac;
 						
@@ -3690,13 +3691,13 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						rect.Height = rect.Height + 1;
 					}
 					
-					/// poc
+					/// poc & imbalance
 					
 					if(footprintDisplayType == FPV2FootprintDisplayType.Numbers)
 					{
 						if(ri.Key == poc)
 						{
-							proBrush.Opacity = 0.8f;
+							proBrush.Opacity = 1.0f;
 							
 							vec1.X = rect.X + cellWidth - 1f;
 							vec1.Y = y1 - 1f;
@@ -3706,10 +3707,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							
 							RenderTarget.DrawLine(vec1, vec2, proBrush, 3);
 						}
-						
+						/*
 						if(isAskImbalance)
 						{
-							askBrush.Opacity = (ri.Key == poc || (i == ChartBars.ToIndex && GetCurrentAsk() == ri.Key && ri.Key == prc)) ? 1.0f : 0.8f;
+							askBrush.Opacity = 1.0f;
 							
 							vec1.X = rect.X + cellWidth;
 							vec1.Y = y1 - 1f;
@@ -3719,6 +3720,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							
 							RenderTarget.DrawLine(vec1, vec2, askBrush, 1);
 						}
+						*/
 					}
 					
 					/// ask - text
@@ -3734,21 +3736,21 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						
 						/// ---
 						
-						vec1.X = rect.X + 4f;
+						vec1.X = rect.X + 6f;
 						vec1.Y = rect.Y - 1f;
 						
 						/// ---
 						
-						opac = (footprintGradient) ? (float)Math.Round((oRng / maxVol) * ri.Value.ask, 5) + 0.3f : 0.45f;
+						opac = (footprintGradient) ? (float)Math.Round((oRng / maxVol) * ri.Value.ask, 5) + 0.6f : 0.75f;
 						
-						if(ri.Key == poc || isAskImbalance)
+						if(isAskImbalance)
 						{
-							opac = 0.9f;
+							opac = 1.0f;
 						}
 						
-						if(i == ChartBars.ToIndex && GetCurrentAsk() == ri.Key && ri.Key == prc)
+						if(!footprintGradient && ri.Key == poc)
 						{
-							opac += 0.15f;
+							opac = 1.0f;
 						}
 						
 						opac = Math.Min(1.0f, opac);
@@ -3852,9 +3854,9 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					
 					if(footprintDisplayType == FPV2FootprintDisplayType.Numbers)
 					{
-						opac = (footprintGradient) ? (float)Math.Round((oRng / maxVol) * ri.Value.bid, 5) + 0.04f : 0.15f;
-						opac = (!footprintGradient && ri.Key == poc) ? opac + 0.3f : opac;
-						opac = (i == ChartBars.ToIndex && GetCurrentBid() == ri.Key && ri.Key == prc) ? opac + 0.15f : opac;
+						opac = (footprintGradient) ? (float)Math.Round((oRng / maxVol) * ri.Value.bid, 5) : 0.15f;
+						opac = (!footprintGradient && ri.Key == poc) ? opac + 0.25f : opac;
+						opac = (!footprintGradient && i == ChartBars.ToIndex && GetCurrentBid() == ri.Key && ri.Key == prc) ? opac + 0.1f : opac;
 						
 						proBrush.Opacity = opac;
 						
@@ -3932,13 +3934,13 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						rect.Height = rect.Height + 1;
 					}
 					
-					/// poc
+					/// poc & imbalance
 					
 					if(footprintDisplayType == FPV2FootprintDisplayType.Numbers)
 					{
 						if(ri.Key == poc)
 						{
-							proBrush.Opacity = 0.8f;
+							proBrush.Opacity = 1.0f;
 							
 							vec1.X = rect.X + 1f;
 							vec1.Y = y1 - 1f;
@@ -3948,10 +3950,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							
 							RenderTarget.DrawLine(vec1, vec2, proBrush, 3);
 						}
-						
+						/*
 						if(isBidImbalance)
 						{
-							bidBrush.Opacity = (ri.Key == poc || (i == ChartBars.ToIndex && GetCurrentBid() == ri.Key && ri.Key == prc)) ? 1.0f : 0.8f;
+							bidBrush.Opacity = 1.0f;
 							
 							vec1.X = rect.X;
 							vec1.Y = y1 - 1f;
@@ -3961,6 +3963,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							
 							RenderTarget.DrawLine(vec1, vec2, bidBrush, 1);
 						}
+						*/
 					}
 					
 					/// bid - text
@@ -3976,21 +3979,21 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						
 						/// ---
 						
-						vec1.X = rect.X - 5f;
+						vec1.X = rect.X - 7f;
 						vec1.Y = rect.Y - 1f;
 						
 						/// ---
 						
-						opac = (footprintGradient) ? (float)Math.Round((oRng / maxVol) * ri.Value.bid, 5) + 0.3f : 0.45f;
+						opac = (footprintGradient) ? (float)Math.Round((oRng / maxVol) * ri.Value.bid, 5) + 0.6f : 0.75f;
 						
-						if(ri.Key == poc || isBidImbalance)
+						if(isBidImbalance)
 						{
-							opac = 0.9f;
+							opac = 1.0f;
 						}
 						
-						if(i == ChartBars.ToIndex && GetCurrentBid() == ri.Key && ri.Key == prc)
+						if(!footprintGradient && ri.Key == poc)
 						{
-							opac += 0.15f;
+							opac = 1.0f;
 						}
 						
 						opac = Math.Min(1.0f, opac);
