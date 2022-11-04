@@ -884,6 +884,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					ntlBrush.Dispose();
 					askBrush.Dispose();
 					bidBrush.Dispose();
+					stkBrush.Dispose();
 				}
 				
 				/// ---
