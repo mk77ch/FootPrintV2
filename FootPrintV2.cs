@@ -689,7 +689,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				
 				/// ---
 				
-				prevProfileShow		 = true;
+				prevProfileShow		 = false;
 				prevProfileWidth 	 = 80;
 				prevProfileGradient  = true;
 				prevProfileBar		 = true;
@@ -712,9 +712,9 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				custProfileShow		 = true;
 				custProfileWidth 	 = 80;
 				custProfileGradient  = true;
-				custProfileValueArea = true;
+				custProfileValueArea = false;
 				custProfileExtendVa  = false;
-				custProfileShowDelta = false;
+				custProfileShowDelta = true;
 				custProfilePctValue	 = 1;
 				custProfileBarValue	 = 20;
 				custProfileVolValue	 = 1;
@@ -2263,7 +2263,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				}
 			}
 			
-			fontSize = (double)Math.Min(Math.Floor(ts*0.5), ls);
+			fontSize = (double)Math.Min(Math.Floor(ts*0.7), ls);
 			
 			if(maxValue > 0.0)
 			{
@@ -2474,6 +2474,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				drawClose(chartControl, chartScale);
 				drawFootPrint(chartControl, chartScale);
 				drawFootPrintBarInfo(chartControl, chartScale);
+				drawPoc(chartControl, chartScale);
 				drawTapeStrip(chartControl, chartScale);
 				drawBottomArea(chartControl, chartScale);
 			}
@@ -2936,6 +2937,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				
 				if(valueArea)
 				{
+					/*
 					if(extendValueArea)
 					{
 						/// vah
@@ -3027,10 +3029,11 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					}
 					else
 					{
+					*/
 						/// vah
 						
 						x1 = rx - barWidth - imbWidth;
-						x2 = rx - profileWidth - barWidth - imbWidth;
+						x2 = (extendValueArea) ? chartControl.GetXByBarIndex(ChartBars, profile.bar - 1) : rx - profileWidth - barWidth - imbWidth;
 						
 						y1 = chartScale.GetYByValue(profile.vah);
 						y2 = y1;
@@ -3045,10 +3048,31 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						
 						RenderTarget.DrawLine(vec1, vec2, askBrush, 1, dLine.StrokeStyle);
 						
+						/// poc
+						/// 
+						if(extendValueArea)
+						{
+							x1 = rx - barWidth - imbWidth;
+							x2 = chartControl.GetXByBarIndex(ChartBars, profile.bar - 1);
+							
+							y1 = chartScale.GetYByValue(profile.poc);
+							y2 = y1;
+							
+							vec1.X = x1;
+							vec1.Y = y1;
+							
+							vec2.X = x2;
+							vec2.Y = y2;
+							
+							pocBrush.Opacity = 0.6f;
+							
+							RenderTarget.DrawLine(vec1, vec2, pocBrush, 1, dLine.StrokeStyle);
+						}
+						
 						/// val
 						
 						x1 = rx - barWidth - imbWidth;
-						x2 = rx - profileWidth - barWidth - imbWidth;
+						x2 = (extendValueArea) ? chartControl.GetXByBarIndex(ChartBars, profile.bar - 1) : rx - profileWidth - barWidth - imbWidth;
 						
 						y1 = chartScale.GetYByValue(profile.val);
 						y2 = y1;
@@ -3062,7 +3086,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						bidBrush.Opacity = 0.6f;
 						
 						RenderTarget.DrawLine(vec1, vec2, bidBrush, 1, dLine.StrokeStyle);
-					}
+					//}
 				}
 				
 				#endregion
@@ -3812,7 +3836,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					
 					// upper outline
 					
-					vec1.X = rect.X ;
+					vec1.X = rect.X;
 					vec1.Y = y1 - 2;
 					
 					vec2.X = rect.X + rect.Width;
@@ -4558,6 +4582,60 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		}
 		
 		#endregion
+		
+		#region drawPoc
+		
+		/// drawPoc
+		///
+		private void drawPoc(ChartControl chartControl, ChartScale chartScale)
+		{
+			if(showFootprint) { return; }
+			
+			SharpDX.Direct2D1.AntialiasMode oldAntialiasMode = RenderTarget.AntialiasMode;
+			RenderTarget.AntialiasMode = SharpDX.Direct2D1.AntialiasMode.Aliased;
+			
+			SharpDX.Vector2 vec1 = new SharpDX.Vector2();
+			SharpDX.Vector2 vec2 = new SharpDX.Vector2();
+			
+			int x1,x2;
+			float y1,y2;
+			
+			BarItem currBarItem;
+			
+			for(int i=ChartBars.FromIndex;i<=ChartBars.ToIndex;i++)
+			{
+				if(BarItems.IsValidDataPointAt(i))
+				{
+					currBarItem = BarItems.GetValueAt(i);
+				}
+				else
+				{
+					continue;
+				}
+				
+				if(currBarItem == null)   { continue; }
+				if(currBarItem.rowItems.IsEmpty) { continue; }
+				
+				x1 = chartControl.GetXByBarIndex(ChartBars, i) - (barFullWidth / 2) - 1;
+				x2 = x1 + barFullWidth;
+				
+				y1 = chartScale.GetYByValue(currBarItem.poc);
+				y2 = y1;
+				
+				vec1.X = x1;
+				vec1.Y = y1;
+				
+				vec2.X = x2;
+				vec2.Y = y2;
+				
+				proBrush.Opacity = 1f;
+				RenderTarget.DrawLine(vec1, vec2, proBrush, 2);
+			}
+			
+			RenderTarget.AntialiasMode = oldAntialiasMode;
+		}
+		
+		#endregion;
 		
 		#region drawBottomArea
 		
