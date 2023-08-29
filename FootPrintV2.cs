@@ -131,6 +131,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		{
 			public int    idx = 0;
 			public bool   ifb = false;
+			public bool   clc = true;
 			public double min = double.MaxValue;
 			public double max = double.MinValue;
 			public double rng = 0.0;
@@ -596,6 +597,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		
 		private bool log = false;
 		private bool bor = false;
+		private bool rdy = false;
 		
 		private double _vol,_ask,_bid,_cls;
 		
@@ -1739,6 +1741,86 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		
 		#endregion
 		
+		#region OnMarketData
+		
+		/// OnMarketData
+		///
+		protected override void OnMarketData(MarketDataEventArgs marketDataUpdate)
+		{
+			if(!rdy) { return; }
+			if(!Bars.IsTickReplay) { return; }
+			if(BarItems[0] == null) { return; }
+			if(CurrentBars[0] == null) { return; }
+			
+			try
+			{
+				if(marketDataUpdate.MarketDataType == MarketDataType.Last)
+				{
+					double prc = Instrument.MasterInstrument.RoundToTickSize(marketDataUpdate.Price);
+					double ask = Instrument.MasterInstrument.RoundToTickSize(marketDataUpdate.Ask);
+					double bid = Instrument.MasterInstrument.RoundToTickSize(marketDataUpdate.Bid);
+					double vol = marketDataUpdate.Volume;
+					double avg = 0.0;
+					
+					if(prc >= ask)
+					{
+						BarItems[0].addAsk(prc, vol, prevProfileShow, currProfileShow, custProfileShow);
+						
+						tapeStrip(prc, vol, ask, bid);
+					}
+					else if(prc <= bid)
+					{
+						BarItems[0].addBid(prc, vol, prevProfileShow, currProfileShow, custProfileShow);
+						
+						tapeStrip(prc, vol, ask, bid);
+					}
+					else
+					{
+						BarItems[0].addVol(prc, vol, prevProfileShow, currProfileShow, custProfileShow);
+					}
+					
+					if(State == State.Historical && BarItems[0].clc == true && BarItems[1] != null)
+					{
+						BarItems[1].calc();
+						
+						if(custProfileShow)
+						{
+							BarItems[1].custProfile.calc();
+						}
+						if(currProfileShow || prevProfileShow)
+						{
+							BarItems[1].currProfile.calc();
+						}
+						
+						BarItems[0].clc = false;
+					}
+					
+					if(State == State.Realtime)
+					{
+						BarItems[0].calc();
+						
+						if(custProfileShow)
+						{
+							BarItems[0].custProfile.calc();
+						}
+						if(currProfileShow || prevProfileShow)
+						{
+							BarItems[0].currProfile.calc();
+						}
+					}
+				}
+			}
+			catch(Exception exception)
+			{
+				if(log)
+				{
+					Print(exception.ToString());
+				}
+			}
+		}
+		
+		#endregion
+		
 		#region OnBarUpdate
 		
 		/// OnBarUpdate
@@ -1761,78 +1843,82 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				
 				if(Bars.IsTickReplay)
 				{
+					rdy = true;
+					
 					if(BarItems[0] == null)
 					{
-						BarItems[0] = new BarItem(CurrentBars[0], BarsArray[0].IsFirstBarOfSession);
+						bool isFirstBarOfSession = Bars.IsFirstBarOfSession;
 						
-						initCustomProfile(CurrentBars[0]);
+						BarItems[0] = new BarItem(CurrentBar, isFirstBarOfSession);
+						
+						if(BarItems[1] != null)
+						{
+							BarItems[0].avg = BarItems[1].avg;
+							BarItems[1].cls = Close[1];
+							
+							if(custProfileShow)
+							{
+								BarItems[1].custProfile.cls = Close[1];
+							}
+							if(currProfileShow || prevProfileShow)
+							{
+								BarItems[1].currProfile.cls = Close[1];
+							}
+						}
+						
+						BarItems[0].opn = Open[0];
+						BarItems[0].cls = Close[0];
+						
+						if(custProfileShow)
+						{
+							BarItems[0].custProfile.opn = Open[0];
+							BarItems[0].custProfile.cls = Close[0];
+						}
 						
 						if(currProfileShow || prevProfileShow)
 						{
-							if(BarsArray[0].IsFirstBarOfSession)
-							{
-								if(BarItems[1] != null && prevProfileShow)
-								{
-									BarItems[0].prevProfile = BarItems[1].currProfile.Clone();
-									BarItems[0].prevProfile.calc();
-								}
-									
-								BarItems[0].currProfile.bar = CurrentBars[0];
-							}
-							else
-							{
-								if(BarItems[1] != null)
-								{
-									BarItems[0].currProfile = BarItems[1].currProfile.Clone();
-									BarItems[0].currProfile.calc();
-									
-									if(prevProfileShow)
-									{
-										BarItems[0].prevProfile = BarItems[1].prevProfile.Clone();
-									}
-								}
-							}
+							BarItems[0].currProfile.opn = Open[0];
+							BarItems[0].currProfile.cls = Close[0];
 						}
-							
-						if(BarItems[1] != null)
-						{
-							if(State == State.Historical)
-							{
-								BarItems[1].calc();
-								
-								if(custProfileShow)
-								{
-									BarItems[1].custProfile.calc();
-								}
-								if(currProfileShow || prevProfileShow)
-								{
-									BarItems[1].currProfile.calc();
-								}
-							}
-						}
-					}
-					
-					if(BarsInProgress == 1)
-					{
-						_vol = Bars.GetVolume(CurrentBar);
-						_ask = Bars.GetAsk(CurrentBar);
-						_bid = Bars.GetBid(CurrentBar);
-			 			_cls = Bars.GetClose(CurrentBar);
 						
-						if(_cls >= _ask)
+						if(isFirstBarOfSession)
 						{
-							BarItems[0].addAsk(_cls, _vol, prevProfileShow, currProfileShow, custProfileShow);
-						}
-						else if(_cls <= _bid)
-						{
-							BarItems[0].addBid(_cls, _vol, prevProfileShow, currProfileShow, custProfileShow);
+							if(currProfileShow || prevProfileShow)
+							{
+								BarItems[0].currProfile.bar = CurrentBar;
+							}
+							
+							if(prevProfileShow && BarItems[1] != null)
+							{
+								BarItems[0].prevProfile = BarItems[1].currProfile.Clone();
+								BarItems[0].prevProfile.calc();
+							}
 						}
 						else
 						{
-							BarItems[0].addVol(_cls, _vol, prevProfileShow, currProfileShow, custProfileShow);
+							if(BarItems[1] != null)
+							{
+								BarItems[0].cdo = BarItems[1].cdc;
+								BarItems[0].cdl = BarItems[1].cdc;
+								BarItems[0].cdh = BarItems[1].cdc;
+								BarItems[0].cdc = BarItems[1].cdc;
+								
+								if(currProfileShow || prevProfileShow)
+								{
+									BarItems[0].currProfile = BarItems[1].currProfile.Clone();
+								}
+								
+								if(prevProfileShow)
+								{
+									BarItems[0].prevProfile = BarItems[1].prevProfile;
+								}
+							}
+							
+							if(custProfileShow)
+							{
+								initCustomProfile(CurrentBar);
+							}
 						}
-						
-						tapeStrip(_cls, _vol, _ask, _bid);
 					}
 				}
 				
