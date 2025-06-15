@@ -15,7 +15,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
         private FootPrintV2 indicator;
         private Chart chartWindow;
         private ToolTip markerToolTip;
-        private bool isDebugMode = true;
+        private bool isDebugMode = false;
 
         public PatternTooltipHelper(FootPrintV2 indicator)
         {
@@ -63,7 +63,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                 }
 
                 // Apply NinjaTrader theme styling
-                ApplyNinjaTraderStyling();
+                indicator.ChartControl.Dispatcher.InvokeAsync((Action)(() =>
+                {
+                    ApplyNinjaTraderStyling();
+                }));
             }
         }
 

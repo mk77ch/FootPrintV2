@@ -59,17 +59,32 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		public int Direction { get; set; }
 		public string Details { get; set; } = "";
 	}
+
+	class RollingData
+	{
+		public double avgLvlAsk = 0.0;
+		public double avgLvlBid = 0.0;
+		public double avgLvlVol = 0.0;
+		public double avgLvlDta = 0.0;
+		public double avgBarAsk = 0.0;
+		public double avgBarBid = 0.0;
+		public double avgBarVol = 0.0;
+		public double avgBarDta = 0.0;
+	}
+
 	public class PatternDetector
 	{
 		private readonly BarData barData;
 		private readonly double tickSize;
+		private readonly Action<string> print;
 		private readonly int lookback = 10;
 		public List<DetectedPattern> DetectedPatterns = new List<DetectedPattern>();
 
-		public PatternDetector(BarData barData, double tickSize)
+		public PatternDetector(BarData barData, double tickSize, Action<string> printMethod)
 		{
 			this.barData = barData;
 			this.tickSize = tickSize;
+			this.print = printMethod;
 		}
 		public void OnBarUpdate(int currentBar)
 		{
@@ -77,20 +92,21 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			var barItem = barData.BarItems.GetValueAt(currentBar);
 			if (barItem == null || barItem.rowItems == null || barItem.rowItems.Count == 0) return;
 
-			// Calculate average level volume manually to avoid dynamic/LINQ issues
-			double totalVolume = 0;
-			int count = 0;
-			foreach (var rowItem in barItem.rowItems.Values)
-			{
-				totalVolume += rowItem.ask + rowItem.bid;
-				count++;
-			}
-			double avgLevelVolume = count > 0 ? totalVolume / count : 0;
+			RollingData rollingData = GetRollingData(currentBar, lookback);
 
-			double avgBarVolume = GetRollingAvgBarVolume(currentBar, lookback);
-			double avgBarDelta = GetRollingAvgBarDelta(currentBar, lookback);
+			double avgLvlAsk = rollingData.avgLvlAsk;
+			double avgLvlBid = rollingData.avgLvlBid;
+			double avgLvlVol = rollingData.avgLvlVol;
+			double avgLvlDta = rollingData.avgLvlDta;
 
-			DetectAbsorption(currentBar, barItem, avgLevelVolume);
+			double avgBarAsk = rollingData.avgBarAsk;
+			double avgBarBid = rollingData.avgBarBid;
+			double avgBarVol = rollingData.avgBarVol;
+			double avgBarDta = rollingData.avgBarDta;
+
+			DetectedPatterns.RemoveAll(p => p.BarIndex == currentBar);
+
+			DetectAbsorption(currentBar, barItem, avgLvlAsk, avgLvlBid);
 			//DetectImbalanceCluster(currentBar, barItem, avgLevelVolume);
 			//DetectDeltaDivergence(currentBar, barItem, avgBarDelta);
 			//DetectZeroPrints(currentBar, barItem);
@@ -101,26 +117,27 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 
 		// ---- Pattern Methods ----
 
-		private void DetectAbsorption(int bar, dynamic barItem, double avgLevelVolume)
+		private void DetectAbsorption(int bar, dynamic barItem, double avgAskLvlVolume, double avgBidLvlVolume)
 		{
 			try
 			{
-				double absorptionThreshold = avgLevelVolume * 2.0;
+				double askAbsorptionThreshold = avgAskLvlVolume * 2.0;
+				double bidAbsorptionThreshold = avgBidLvlVolume * 2.0;
 
 				foreach (var row in barItem.rowItems)
 				{
-					if (row.Value.ask > absorptionThreshold && barItem.max == row.Key)
+					if (row.Value.ask > askAbsorptionThreshold && row.Key == barItem.max && row.Key == barItem.poc)
 					{
 						DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = row.Key, PatternType = "Absorption-Ask", Direction = 1, Details = "Absorption at high" });
 					}
-					if (row.Value.bid > absorptionThreshold && barItem.min == row.Key)
+					if (row.Value.bid > bidAbsorptionThreshold && row.Key == barItem.min && row.Key == barItem.poc)
 					{
 						DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = row.Key, PatternType = "Absorption-Bid", Direction = -1, Details = "Absorption at low" });
 					}
 				}
 			}
 			catch (Exception ex)
-			{ }
+			{ print($"Error in DetectAbsorption: {ex.Message}"); }
 		}
 
 		private void DetectImbalanceCluster(int bar, dynamic barItem, double avgLevelVolume)
@@ -229,34 +246,94 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		}
 
 		// ---- Helper Methods ----
+		private RollingData GetRollingData(int currentBar, int N)
+		{
+			var rollingData = new RollingData();
 
-		private double GetRollingAvgBarVolume(int currentBar, int N)
-		{
-			double sum = 0; int count = 0;
+			double askLvlSum = 0;
+			double bidLvlSum = 0;
+			double volLvlSum = 0;
+			double dtaLvlSum = 0;
+
+			int askLvlCount = 0;
+			int bidLvlCount = 0;
+			int volLvlCount = 0;
+			int dtaLvlCount = 0;
+
+			double askBarSum = 0;
+			double bidBarSum = 0;
+			double volBarSum = 0;
+			double dtaBarSum = 0;
+
+			int askBarCount = 0;
+			int bidBarCount = 0;
+			int volBarCount = 0;
+			int dtaBarCount = 0;
+
 			for (int i = 1; i <= N; i++)
 			{
 				int idx = currentBar - i;
 				if (idx < 0 || !barData.BarItems.IsValidDataPointAt(idx)) continue;
 				var barItem = barData.BarItems.GetValueAt(idx);
-				if (barItem == null) continue;
-				sum += barItem.vol;
-				count++;
+				if (barItem == null || barItem.rowItems == null || barItem.rowItems.Count == 0) continue;
+
+				foreach (var rowItem in barItem.rowItems.Values)
+				{
+					if (rowItem.ask > 0)
+					{
+						askLvlSum += rowItem.ask;
+						askLvlCount++;
+					}
+					if (rowItem.bid > 0)
+					{
+						bidLvlSum += rowItem.bid;
+						bidLvlCount++;
+					}
+					if (rowItem.vol > 0)
+					{
+						volLvlSum += rowItem.vol;
+						volLvlCount++;
+					}
+					if (rowItem.dta != 0)
+					{
+						dtaLvlSum += rowItem.dta;
+						dtaLvlCount++;
+					}
+				}
+
+				if (barItem.ask > 0)
+				{
+					askBarSum += barItem.ask;
+					askBarCount++;
+				}
+				if (barItem.bid > 0)
+				{
+					bidBarSum += barItem.bid;
+					bidBarCount++;
+				}
+				if (barItem.vol > 0)
+				{
+					volBarSum += barItem.vol;
+					volBarCount++;
+				}
+				if (barItem.dtc != 0)
+				{
+					dtaBarSum += barItem.dtc;
+					dtaBarCount++;
+				}
 			}
-			return count > 0 ? sum / count : 1.0;
-		}
-		private double GetRollingAvgBarDelta(int currentBar, int N)
-		{
-			double sum = 0; int count = 0;
-			for (int i = 1; i <= N; i++)
-			{
-				int idx = currentBar - i;
-				if (idx < 0 || !barData.BarItems.IsValidDataPointAt(idx)) continue;
-				var barItem = barData.BarItems.GetValueAt(idx);
-				if (barItem == null) continue;
-				sum += barItem.dtc;  // Fixed: Changed from 'dta' to 'dtc'
-				count++;
-			}
-			return count > 0 ? sum / count : 1.0;
+
+			rollingData.avgLvlAsk = askLvlCount > 0 ? askLvlSum / askLvlCount : 1.0;
+			rollingData.avgLvlBid = bidLvlCount > 0 ? bidLvlSum / bidLvlCount : 1.0;
+			rollingData.avgLvlVol = volLvlCount > 0 ? volLvlSum / volLvlCount : 1.0;
+			rollingData.avgLvlDta = dtaLvlCount > 0 ? dtaLvlSum / dtaLvlCount : 0.0;
+
+			rollingData.avgBarAsk = askBarCount > 0 ? askBarSum / askBarCount : 1.0;
+			rollingData.avgBarBid = bidBarCount > 0 ? bidBarSum / bidBarCount : 1.0;
+			rollingData.avgBarVol = volBarCount > 0 ? volBarSum / volBarCount : 1.0;
+			rollingData.avgBarDta = dtaBarCount > 0 ? dtaBarSum / dtaBarCount : 0.0;
+
+			return rollingData;
 		}
 	}
 
@@ -658,7 +735,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 
 				/// ---
 
-				patternDetector = new PatternDetector(barData, TickSize);
+				patternDetector = new PatternDetector(barData, TickSize, this.Print);
 
 				/// ---
 
@@ -5794,6 +5871,9 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 
 		private void drawPatterns(ChartControl chartControl, ChartScale chartScale)
 		{
+			askBrush.Opacity = 1.0f;
+			bidBrush.Opacity = 1.0f;
+
 			if (patternDetector != null)
 			{
 				foreach (var pattern in patternDetector.DetectedPatterns)
