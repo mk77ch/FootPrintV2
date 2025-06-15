@@ -5806,10 +5806,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					switch (pattern.PatternType)
 					{
 						case "Absorption-Ask":
-							RenderTarget.DrawEllipse(new SharpDX.Direct2D1.Ellipse(new SharpDX.Vector2(x, y), 6, 6), askBrush, 2);
+							RenderTarget.DrawEllipse(new SharpDX.Direct2D1.Ellipse(new SharpDX.Vector2(x, y), 6, 6), bidBrush, 2);
 							break;
 						case "Absorption-Bid":
-							RenderTarget.DrawEllipse(new SharpDX.Direct2D1.Ellipse(new SharpDX.Vector2(x, y), 6, 6), bidBrush, 2);
+							RenderTarget.DrawEllipse(new SharpDX.Direct2D1.Ellipse(new SharpDX.Vector2(x, y), 6, 6), askBrush, 2);
 							break;
 						case "ImbalanceCluster-Ask":
 						case "ImbalanceCluster-Bid":

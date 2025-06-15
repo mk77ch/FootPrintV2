@@ -254,7 +254,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                         double dist = Math.Sqrt(Math.Pow(mouse.X - x, 2) + Math.Pow(mouse.Y - y, 2));
 
                         // Show tooltip if close enough (within 30 pixels)
-                        if (dist < 30)
+                        if (dist <= 10)
                         {
                             string tooltipContent = $"{pattern.PatternType ?? "Pattern"}\n{pattern.Details ?? $"Bar: {pattern.BarIndex}, Price: {pattern.Price:F2}"}";
 
