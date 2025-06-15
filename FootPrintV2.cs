@@ -78,6 +78,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		private readonly double tickSize;
 		private readonly Action<string> print;
 		private readonly int lookback = 10;
+		private int lastProcessedBar = -1;
+		private RollingData rollingData;
 		public List<DetectedPattern> DetectedPatterns = new List<DetectedPattern>();
 
 		public PatternDetector(BarData barData, double tickSize, Action<string> printMethod)
@@ -92,7 +94,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			var barItem = barData.BarItems.GetValueAt(currentBar);
 			if (barItem == null || barItem.rowItems == null || barItem.rowItems.Count == 0) return;
 
-			RollingData rollingData = GetRollingData(currentBar, lookback);
+			if (currentBar != lastProcessedBar || rollingData == null)
+			{
+				rollingData = GetRollingData(currentBar, lookback);
+			}
 
 			double avgLvlAsk = rollingData.avgLvlAsk;
 			double avgLvlBid = rollingData.avgLvlBid;
@@ -113,6 +118,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			//DetectInitiatingResponsive(currentBar, barItem, avgLevelVolume);
 			//DetectFootprintTails(currentBar, barItem, avgLevelVolume);
 			//DetectMultiBarAbsAgg(currentBar, barItem, avgLevelVolume, avgBarDelta);
+
+			lastProcessedBar = currentBar;
 		}
 
 		// ---- Pattern Methods ----
