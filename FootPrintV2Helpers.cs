@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using NinjaTrader.Gui.Chart;
@@ -54,7 +55,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                 }
             }
         }
-        
+
         public PatternDetector(BarData barData, double tickSize, Action<string> printMethod, bool enableLogging = false)
         {
             this.barData = barData;
@@ -331,13 +332,14 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
             return rollingData;
         }
     }
-
     public class PatternTooltipHelper
     {
         private FootPrintV2 indicator;
         private Chart chartWindow;
-        private ToolTip markerToolTip;
-        private bool isDebugMode = true;
+        private Canvas tooltipCanvas;
+        private Border tooltipBorder;
+        private TextBlock tooltipText;
+        private bool isDebugMode = false;
 
         public PatternTooltipHelper(FootPrintV2 indicator)
         {
@@ -350,69 +352,161 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
             chartWindow = Window.GetWindow(indicator.ChartControl.Parent) as Chart;
             if (chartWindow == null) return;
 
-            CreateStyledTooltip();
-
+            CreateTooltipCanvas();
             indicator.ChartControl.MouseMove += ChartControl_MouseMove;
         }
-
-        private void CreateStyledTooltip()
+        private void CreateTooltipCanvas()
         {
-            if (markerToolTip == null)
+            try
             {
-                markerToolTip = new ToolTip
+                if (indicator.ChartControl.Dispatcher.CheckAccess())
                 {
-                    Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint,
-                    StaysOpen = false,
-                    Visibility = Visibility.Collapsed,
-                    HasDropShadow = true,
-                    IsHitTestVisible = false,
-                    PlacementTarget = indicator.ChartControl,
-                };
-
-                ApplyNinjaTraderStyling();
-				
-				ShowToolTip("");
+                    CreateUIElementsOnUIThread();
+                }
+                else
+                {
+                    indicator.ChartControl.Dispatcher.Invoke(new Action(CreateUIElementsOnUIThread));
+                }
+            }
+            catch (Exception ex)
+            {
+                if (isDebugMode)
+                    indicator.Print($"Error creating canvas tooltip: {ex.Message}");
             }
         }
 
+        private void CreateUIElementsOnUIThread()
+        {
+            try
+            {
+                // Create canvas overlay
+                tooltipCanvas = new Canvas
+                {
+                    Background = Brushes.Transparent,
+                    IsHitTestVisible = false, // Canvas doesn't capture mouse events
+                    Visibility = Visibility.Hidden,
+                };
+
+                // Create text block
+                tooltipText = new TextBlock
+                {
+                    Padding = new Thickness(8, 4, 8, 4),
+                    TextWrapping = TextWrapping.Wrap,
+                    IsHitTestVisible = false,
+                    Focusable = false,
+                };
+
+                // Create border
+                tooltipBorder = new Border
+                {
+                    Child = tooltipText,
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(2),
+                    IsHitTestVisible = false,
+                    Focusable = false,
+                };
+
+                // Add border to canvas
+                tooltipCanvas.Children.Add(tooltipBorder);
+
+                // Add canvas to chart's parent grid
+                var chartParent = indicator.ChartControl.Parent as Panel;
+                if (chartParent != null)
+                {
+                    chartParent.Children.Add(tooltipCanvas);
+                    Panel.SetZIndex(tooltipCanvas, 1000); // Ensure it's on top
+                }
+
+                // Apply styling now that everything is on UI thread
+                ApplyFallbackStylingOnUIThread();
+
+                if (isDebugMode)
+                    indicator.Print("Canvas tooltip created successfully on UI thread");
+            }
+            catch (Exception ex)
+            {
+                if (isDebugMode)
+                    indicator.Print($"Error in CreateUIElementsOnUIThread: {ex.Message}");
+            }
+        }
         private void ApplyNinjaTraderStyling()
         {
             try
             {
-                indicator.ChartControl.Dispatcher.InvokeAsync((Action)(() =>
+                if (indicator.ChartControl.Dispatcher.CheckAccess())
                 {
-                    var mainWindow = Application.Current.MainWindow;
-                    if (mainWindow != null)
-                    {
-                        var backgroundBrush = TryGetThemeResource(mainWindow, "BackgroundBrush") as Brush ?? TryGetThemeResource(mainWindow, "ControlBackgroundBrush") as Brush;
-
-                        var foregroundBrush = TryGetThemeResource(mainWindow, "FontBrush") as Brush ?? TryGetThemeResource(mainWindow, "ControlForegroundBrush") as Brush;
-
-                        var borderBrush = TryGetThemeResource(mainWindow, "BorderThinBrush") as Brush ?? TryGetThemeResource(mainWindow, "ControlBorderBrush") as Brush;
-
-                        if (backgroundBrush != null) markerToolTip.Background = backgroundBrush;
-                        if (foregroundBrush != null) markerToolTip.Foreground = foregroundBrush;
-                        if (borderBrush != null) markerToolTip.BorderBrush = borderBrush;
-
-                        markerToolTip.BorderThickness = new Thickness(1);
-                        markerToolTip.Padding = new Thickness(8, 4, 8, 4);
-
-                        var fontFamily = TryGetThemeResource(mainWindow, "MainFontFamily") as System.Windows.Media.FontFamily;
-                        var fontSize = TryGetThemeResource(mainWindow, "MainFontSize");
-
-                        if (fontFamily != null) markerToolTip.FontFamily = fontFamily;
-                        if (fontSize != null && fontSize is double fontSizeValue) markerToolTip.FontSize = fontSizeValue;
-                    }
-                }));
+                    ApplyStylingOnUIThread();
+                }
+                else
+                {
+                    indicator.ChartControl.Dispatcher.BeginInvoke(new Action(ApplyStylingOnUIThread));
+                }
             }
             catch (Exception ex)
             {
-                if (isDebugMode && indicator != null)
+                if (isDebugMode)
                     indicator.Print($"Error applying NT styling: {ex.Message}");
-            }
-            finally
-            {
                 ApplyFallbackStyling();
+            }
+        }
+        private void ApplyStylingOnUIThread()
+        {
+            try
+            {
+                var mainWindow = Application.Current.MainWindow;
+                if (mainWindow != null)
+                {
+                    var backgroundBrush = TryGetThemeResource(mainWindow, "BackgroundBrush") as Brush ??
+                                         TryGetThemeResource(mainWindow, "ControlBackgroundBrush") as Brush;
+
+                    var foregroundBrush = TryGetThemeResource(mainWindow, "FontBrush") as Brush ??
+                                         TryGetThemeResource(mainWindow, "ControlForegroundBrush") as Brush;
+
+                    var borderBrush = TryGetThemeResource(mainWindow, "BorderThinBrush") as Brush ??
+                                     TryGetThemeResource(mainWindow, "ControlBorderBrush") as Brush;
+
+                    // Apply to border with individual try-catch
+                    try
+                    {
+                        if (backgroundBrush != null) tooltipBorder.Background = backgroundBrush;
+                    }
+                    catch { /* Ignore individual property errors */ }
+
+                    try
+                    {
+                        if (borderBrush != null) tooltipBorder.BorderBrush = borderBrush;
+                    }
+                    catch { /* Ignore individual property errors */ }
+
+                    // Apply to text with individual try-catch
+                    try
+                    {
+                        if (foregroundBrush != null) tooltipText.Foreground = foregroundBrush;
+                    }
+                    catch { /* Ignore individual property errors */ }
+
+                    var fontFamily = TryGetThemeResource(mainWindow, "MainFontFamily") as System.Windows.Media.FontFamily;
+                    var fontSize = TryGetThemeResource(mainWindow, "MainFontSize");
+
+                    try
+                    {
+                        if (fontFamily != null) tooltipText.FontFamily = fontFamily;
+                    }
+                    catch { /* Ignore individual property errors */ }
+
+                    try
+                    {
+                        if (fontSize != null && fontSize is double fontSizeValue) tooltipText.FontSize = fontSizeValue;
+                    }
+                    catch { /* Ignore individual property errors */ }
+                }
+
+                ApplyFallbackStyling();
+            }
+            catch (Exception ex)
+            {
+                if (isDebugMode)
+                    indicator.Print($"Error in ApplyStylingOnUIThread: {ex.Message}");
             }
         }
 
@@ -427,37 +521,94 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                 return null;
             }
         }
-
         private void ApplyFallbackStyling()
         {
-            if (markerToolTip.Background == null)
-                markerToolTip.Background = new SolidColorBrush(Color.FromRgb(45, 45, 48));
+            try
+            {
+                if (indicator.ChartControl.Dispatcher.CheckAccess())
+                {
+                    ApplyFallbackStylingOnUIThread();
+                }
+                else
+                {
+                    indicator.ChartControl.Dispatcher.BeginInvoke(new Action(ApplyFallbackStylingOnUIThread));
+                }
+            }
+            catch (Exception ex)
+            {
+                if (isDebugMode)
+                    indicator.Print($"Error in ApplyFallbackStyling: {ex.Message}");
+            }
+        }
 
-            if (markerToolTip.Foreground == null)
-                markerToolTip.Foreground = new SolidColorBrush(Color.FromRgb(241, 241, 241));
+        private void ApplyFallbackStylingOnUIThread()
+        {
+            try
+            {
+                // Apply fallback styling with individual try-catch blocks
+                try
+                {
+                    if (tooltipBorder.Background == null)
+                        tooltipBorder.Background = new SolidColorBrush(Color.FromRgb(45, 45, 48));
+                }
+                catch { /* Ignore individual property errors */ }
 
-            if (markerToolTip.BorderBrush == null)
-                markerToolTip.BorderBrush = new SolidColorBrush(Color.FromRgb(63, 63, 70));
+                try
+                {
+                    if (tooltipBorder.BorderBrush == null)
+                        tooltipBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(63, 63, 70));
+                }
+                catch { /* Ignore individual property errors */ }
 
-            if (markerToolTip.BorderThickness.Left == 0)
-                markerToolTip.BorderThickness = new Thickness(1);
+                try
+                {
+                    if (tooltipText.Foreground == null)
+                        tooltipText.Foreground = new SolidColorBrush(Color.FromRgb(241, 241, 241));
+                }
+                catch { /* Ignore individual property errors */ }
 
-            if (markerToolTip.Padding.Left == 0)
-                markerToolTip.Padding = new Thickness(8, 4, 8, 4);
+                try
+                {
+                    if (tooltipText.FontFamily == null)
+                        tooltipText.FontFamily = new System.Windows.Media.FontFamily("Segoe UI");
+                }
+                catch { /* Ignore individual property errors */ }
 
-            if (markerToolTip.FontFamily == null)
-                markerToolTip.FontFamily = new System.Windows.Media.FontFamily("Segoe UI");
-
-            if (markerToolTip.FontSize == 0)
-                markerToolTip.FontSize = 11;
+                try
+                {
+                    if (tooltipText.FontSize == 0)
+                        tooltipText.FontSize = 11;
+                }
+                catch { /* Ignore individual property errors */ }
+            }
+            catch (Exception ex)
+            {
+                if (isDebugMode)
+                    indicator.Print($"Error in ApplyFallbackStylingOnUIThread: {ex.Message}");
+            }
         }
 
         public void Detach()
         {
-            if (indicator.ChartControl != null)
-                indicator.ChartControl.MouseMove -= ChartControl_MouseMove;
-            if (markerToolTip != null)
-                markerToolTip.IsOpen = false;
+            try
+            {
+                if (indicator.ChartControl != null)
+                    indicator.ChartControl.MouseMove -= ChartControl_MouseMove;
+
+                if (tooltipCanvas != null)
+                {
+                    var chartParent = indicator.ChartControl.Parent as Panel;
+                    if (chartParent != null && chartParent.Children.Contains(tooltipCanvas))
+                    {
+                        chartParent.Children.Remove(tooltipCanvas);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (isDebugMode)
+                    indicator.Print($"Error in detach: {ex.Message}");
+            }
         }
 
         private void ChartControl_MouseMove(object sender, MouseEventArgs e)
@@ -473,6 +624,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                 }
 
                 Point mouse = e.GetPosition(indicator.ChartControl);
+                bool patternFound = false;
 
                 foreach (var pattern in indicator.patternDetector.DetectedPatterns)
                 {
@@ -487,24 +639,27 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 
                         double dist = Math.Sqrt(Math.Pow(mouse.X - x, 2) + Math.Pow(mouse.Y - y, 2));
 
-                        if (dist < 10)
+                        if (dist < 15)
                         {
                             string tooltipContent = $"{pattern.PatternType ?? "Pattern"}\n{pattern.Details ?? $"Bar: {pattern.BarIndex}, Price: {pattern.Price:F2}"}";
-							
-							ShowToolTip(tooltipContent);
-							
-                            return;
+
+                            ShowTooltip(tooltipContent, mouse);
+                            patternFound = true;
+                            break;
                         }
                     }
                     catch (Exception ex)
                     {
                         if (isDebugMode)
-                            indicator.Print($"Error processing pattern at bar {pattern.BarIndex}: {ex.Message}");
+                            indicator.Print($"Error processing pattern: {ex.Message}");
                         continue;
                     }
                 }
 
-                HideTooltip();
+                if (!patternFound)
+                {
+                    HideTooltip();
+                }
             }
             catch (Exception ex)
             {
@@ -513,48 +668,48 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
             }
         }
 
-        private void RestoreChartFocus()
+        private void ShowTooltip(string content, Point mousePosition)
         {
             try
             {
-                // Multiple approaches to ensure focus returns to chart
-                indicator.ChartControl.Dispatcher.BeginInvoke(new Action(() =>
+                if (tooltipCanvas == null || tooltipText == null || tooltipBorder == null)
+                    return;
+
+                tooltipText.Text = content;
+
+                // Position the tooltip
+                Canvas.SetLeft(tooltipBorder, mousePosition.X + 15);
+                Canvas.SetTop(tooltipBorder, mousePosition.Y - 10);
+
+                if (tooltipCanvas.Visibility != Visibility.Visible)
                 {
-                    // Method 1: Focus the ChartControl
-                    indicator.ChartControl.Focus();
-
-                    // Method 2: Focus the parent chart window
-                    if (chartWindow != null)
-                        chartWindow.Focus();
-
-                    // Method 3: Capture mouse to ChartControl
-                    if (indicator.ChartControl.IsMouseCaptured == false)
-                        indicator.ChartControl.CaptureMouse();
-
-                }), System.Windows.Threading.DispatcherPriority.Background);
+                    tooltipCanvas.Visibility = Visibility.Visible;
+                    if (isDebugMode)
+                        indicator.Print($"Canvas tooltip shown at: {mousePosition.X + 15:F0}, {mousePosition.Y - 10:F0}");
+                }
             }
             catch (Exception ex)
             {
                 if (isDebugMode)
-                    indicator.Print($"Error restoring focus: {ex.Message}");
+                    indicator.Print($"Error showing tooltip: {ex.Message}");
             }
         }
-		
-		private void ShowToolTip(string content)
-		{
-			markerToolTip.Content = content;
-            markerToolTip.Visibility = Visibility.Visible;
-            markerToolTip.IsOpen = true;
-
-            RestoreChartFocus();
-		}
 
         private void HideTooltip()
         {
-            if (markerToolTip != null)
+            try
             {
-                markerToolTip.IsOpen = false;
-                markerToolTip.Visibility = Visibility.Collapsed;
+                if (tooltipCanvas != null && tooltipCanvas.Visibility == Visibility.Visible)
+                {
+                    tooltipCanvas.Visibility = Visibility.Hidden;
+                    if (isDebugMode)
+                        indicator.Print("Canvas tooltip hidden");
+                }
+            }
+            catch (Exception ex)
+            {
+                if (isDebugMode)
+                    indicator.Print($"Error hiding tooltip: {ex.Message}");
             }
         }
     }
