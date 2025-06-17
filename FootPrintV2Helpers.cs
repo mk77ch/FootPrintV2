@@ -113,12 +113,12 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
         {
             try
             {
-                double askAbsorptionThreshold = avgAskLvlVolume * 2.0;
-                double bidAbsorptionThreshold = avgBidLvlVolume * 2.0;
+                double askAbsorptionThreshold = avgAskLvlVolume * 1.5;
+                double bidAbsorptionThreshold = avgBidLvlVolume * 1.5;
 
                 foreach (var row in barItem.rowItems)
                 {
-                    if (row.Key == barItem.max && row.Key == barItem.poc) // row.Value.ask > askAbsorptionThreshold && 
+                    if (row.Key == barItem.max && row.Key == barItem.poc && row.Value.ask >= askAbsorptionThreshold)
                     {
                         var pattern = new DetectedPattern
                         {
@@ -126,7 +126,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                             Price = row.Key,
                             PatternType = "Absorption-Ask",
                             Direction = 1,
-                            Details = $"Absorption at high: {row.Value.ask:F0} vol",
+                            Details = $"Absorption at high: {row.Value.ask:F0}, Avg Ask: {avgAskLvlVolume:F0}",
                             Timestamp = DateTime.Now
                         };
 
@@ -135,7 +135,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                             DetectedPatterns.Add(pattern);
                         }
                     }
-                    if (row.Key == barItem.min && row.Key == barItem.poc) // row.Value.bid > bidAbsorptionThreshold && 
+                    if (row.Key == barItem.min && row.Key == barItem.poc && row.Value.bid >= bidAbsorptionThreshold)
                     {
                         var pattern = new DetectedPattern
                         {
@@ -143,7 +143,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                             Price = row.Key,
                             PatternType = "Absorption-Bid",
                             Direction = -1,
-                            Details = $"Absorption at low: {row.Value.bid:F0} vol",
+                            Details = $"Absorption at low: {row.Value.bid:F0}, Avg Bid: {avgBidLvlVolume:F0}",
                             Timestamp = DateTime.Now
                         };
 
