@@ -49,303 +49,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 
 	#endregion
 
-	#region PatternDetector
-
-	public class DetectedPattern
-	{
-		public int BarIndex { get; set; }
-		public double Price { get; set; }
-		public string PatternType { get; set; } = "Unknown";
-		public int Direction { get; set; }
-		public string Details { get; set; } = "";
-	}
-
-	class RollingData
-	{
-		public double avgLvlAsk = 0.0;
-		public double avgLvlBid = 0.0;
-		public double avgLvlVol = 0.0;
-		public double avgLvlDta = 0.0;
-		public double avgBarAsk = 0.0;
-		public double avgBarBid = 0.0;
-		public double avgBarVol = 0.0;
-		public double avgBarDta = 0.0;
-	}
-
-	public class PatternDetector
-	{
-		private readonly BarData barData;
-		private readonly double tickSize;
-		private readonly Action<string> print;
-		private readonly int lookback = 10;
-		private int lastProcessedBar = -1;
-		private RollingData rollingData;
-		public List<DetectedPattern> DetectedPatterns = new List<DetectedPattern>();
-
-		public PatternDetector(BarData barData, double tickSize, Action<string> printMethod)
-		{
-			this.barData = barData;
-			this.tickSize = tickSize;
-			this.print = printMethod;
-		}
-		public void OnBarUpdate(int currentBar)
-		{
-			if (!barData.BarItems.IsValidDataPointAt(currentBar)) return;
-			var barItem = barData.BarItems.GetValueAt(currentBar);
-			if (barItem == null || barItem.rowItems == null || barItem.rowItems.Count == 0) return;
-
-			if (currentBar != lastProcessedBar || rollingData == null)
-			{
-				rollingData = GetRollingData(currentBar, lookback);
-			}
-
-			double avgLvlAsk = rollingData.avgLvlAsk;
-			double avgLvlBid = rollingData.avgLvlBid;
-			double avgLvlVol = rollingData.avgLvlVol;
-			double avgLvlDta = rollingData.avgLvlDta;
-
-			double avgBarAsk = rollingData.avgBarAsk;
-			double avgBarBid = rollingData.avgBarBid;
-			double avgBarVol = rollingData.avgBarVol;
-			double avgBarDta = rollingData.avgBarDta;
-
-			DetectedPatterns.RemoveAll(p => p.BarIndex == currentBar);
-
-			DetectAbsorption(currentBar, barItem, avgLvlAsk, avgLvlBid);
-			//DetectImbalanceCluster(currentBar, barItem, avgLevelVolume);
-			//DetectDeltaDivergence(currentBar, barItem, avgBarDelta);
-			//DetectZeroPrints(currentBar, barItem);
-			//DetectInitiatingResponsive(currentBar, barItem, avgLevelVolume);
-			//DetectFootprintTails(currentBar, barItem, avgLevelVolume);
-			//DetectMultiBarAbsAgg(currentBar, barItem, avgLevelVolume, avgBarDelta);
-
-			lastProcessedBar = currentBar;
-		}
-
-		// ---- Pattern Methods ----
-
-		private void DetectAbsorption(int bar, dynamic barItem, double avgAskLvlVolume, double avgBidLvlVolume)
-		{
-			try
-			{
-				double askAbsorptionThreshold = avgAskLvlVolume * 2.0;
-				double bidAbsorptionThreshold = avgBidLvlVolume * 2.0;
-
-				foreach (var row in barItem.rowItems)
-				{
-					if (row.Value.ask > askAbsorptionThreshold && row.Key == barItem.max && row.Key == barItem.poc)
-					{
-						DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = row.Key, PatternType = "Absorption-Ask", Direction = 1, Details = "Absorption at high" });
-					}
-					if (row.Value.bid > bidAbsorptionThreshold && row.Key == barItem.min && row.Key == barItem.poc)
-					{
-						DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = row.Key, PatternType = "Absorption-Bid", Direction = -1, Details = "Absorption at low" });
-					}
-				}
-			}
-			catch (Exception ex)
-			{ print($"Error in DetectAbsorption: {ex.Message}"); }
-		}
-
-		private void DetectImbalanceCluster(int bar, dynamic barItem, double avgLevelVolume)
-		{
-			double minImbalanceRatio = 0.4; // You can make this configurable
-			int minClusterLength = 3; // Configurable
-			int streakAsk = 0, streakBid = 0;
-			var prices = ((IEnumerable<double>)barItem.rowItems.Keys).OrderByDescending(x => x).ToList(); foreach (var price in prices)
-			{
-				if (barItem.isAskImbalance(price, price - tickSize, minImbalanceRatio))
-				{
-					streakAsk++;
-					if (streakAsk >= minClusterLength)
-						DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = price, PatternType = "ImbalanceCluster-Ask", Direction = 1, Details = "Ask imbalance cluster" });
-				}
-				else streakAsk = 0;
-
-				if (barItem.isBidImbalance(price + tickSize, price, minImbalanceRatio))
-				{
-					streakBid++;
-					if (streakBid >= minClusterLength)
-						DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = price, PatternType = "ImbalanceCluster-Bid", Direction = -1, Details = "Bid imbalance cluster" });
-				}
-				else streakBid = 0;
-			}
-		}
-
-		private void DetectDeltaDivergence(int bar, dynamic barItem, double avgBarDelta)
-		{
-			// Needs access to swing highs/lows (ZigZag). Here we use delta lower (divergence) at new high, higher at new low.
-			// To keep this example simple, let's just compare current delta to rolling avg.
-			if (barItem.dtc > 0 && barItem.dtc < avgBarDelta)
-				DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = barItem.max, PatternType = "DeltaDivergence-High", Direction = 1, Details = "Weak delta at high" });
-			if (barItem.dtc < 0 && Math.Abs(barItem.dtc) < Math.Abs(avgBarDelta))
-				DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = barItem.min, PatternType = "DeltaDivergence-Low", Direction = -1, Details = "Weak delta at low" });
-		}
-
-		private void DetectZeroPrints(int bar, dynamic barItem)
-		{
-			var highRow = barItem.rowItems[barItem.max];
-			if (highRow.ask > 0 && highRow.bid == 0)
-				DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = barItem.max, PatternType = "ZeroPrint-High", Direction = 1, Details = "Zero bid at high" });
-
-			var lowRow = barItem.rowItems[barItem.min];
-			if (lowRow.bid > 0 && lowRow.ask == 0)
-				DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = barItem.min, PatternType = "ZeroPrint-Low", Direction = -1, Details = "Zero ask at low" });
-		}
-
-		private void DetectInitiatingResponsive(int bar, dynamic barItem, double avgLevelVolume)
-		{
-			double threshold = avgLevelVolume * 2.0;
-			var openRow = barItem.rowItems.ContainsKey(barItem.opn) ? barItem.rowItems[barItem.opn] : null;
-			var closeRow = barItem.rowItems.ContainsKey(barItem.cls) ? barItem.rowItems[barItem.cls] : null;
-			if (openRow != null && openRow.ask > threshold)
-				DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = barItem.opn, PatternType = "InitiatingBuy-Open", Direction = 1, Details = "Strong buy at open" });
-			if (closeRow != null && closeRow.bid > threshold)
-				DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = barItem.cls, PatternType = "InitiatingSell-Close", Direction = -1, Details = "Strong sell at close" });
-		}
-
-		private void DetectFootprintTails(int bar, dynamic barItem, double avgLevelVolume)
-		{
-			int tailRows = 2;
-			double sumBid = 0, sumAsk = 0;
-			var prices = ((IEnumerable<double>)barItem.rowItems.Keys).OrderBy(x => x).ToList(); // ascending for low tail
-			for (int i = 0; i < Math.Min(tailRows, prices.Count); i++)
-			{
-				var row = barItem.rowItems[prices[i]];
-				sumBid += row.bid;
-				sumAsk += row.ask;
-			}
-			if (sumBid > avgLevelVolume * tailRows)
-				DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = prices[0], PatternType = "BuyingTail", Direction = 1, Details = "Strong buying tail" });
-
-			// Top tail
-			sumBid = 0; sumAsk = 0;
-			prices.Reverse();
-			for (int i = 0; i < Math.Min(tailRows, prices.Count); i++)
-			{
-				var row = barItem.rowItems[prices[i]];
-				sumBid += row.bid;
-				sumAsk += row.ask;
-			}
-			if (sumAsk > avgLevelVolume * tailRows)
-				DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = prices[0], PatternType = "SellingTail", Direction = -1, Details = "Strong selling tail" });
-		}
-
-		private void DetectMultiBarAbsAgg(int bar, dynamic barItem, double avgLevelVolume, double avgBarDelta)
-		{
-			// Example: if previous bar had absorption at high, and this bar trades through with high delta
-			// For simplicity, just look one bar back
-			if (bar < 1) return;
-			var prevBarItem = barData.BarItems.IsValidDataPointAt(bar - 1) ? barData.BarItems.GetValueAt(bar - 1) : null;
-			if (prevBarItem != null)
-			{
-				var prevHighRow = prevBarItem.rowItems[prevBarItem.max];
-				if (prevHighRow.ask > avgLevelVolume * 2.0 && barItem.max > prevBarItem.max && barItem.dtc > avgBarDelta * 1.5)
-				{
-					DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = barItem.max, PatternType = "AbsAgg-Breakout", Direction = 1, Details = "Aggressive buy after absorption" });
-				}
-				var prevLowRow = prevBarItem.rowItems[prevBarItem.min];
-				if (prevLowRow.bid > avgLevelVolume * 2.0 && barItem.min < prevBarItem.min && barItem.dtc < avgBarDelta * -1.5)
-				{
-					DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = barItem.min, PatternType = "AbsAgg-Breakdown", Direction = -1, Details = "Aggressive sell after absorption" });
-				}
-			}
-		}
-
-		// ---- Helper Methods ----
-		private RollingData GetRollingData(int currentBar, int N)
-		{
-			var rollingData = new RollingData();
-
-			double askLvlSum = 0;
-			double bidLvlSum = 0;
-			double volLvlSum = 0;
-			double dtaLvlSum = 0;
-
-			int askLvlCount = 0;
-			int bidLvlCount = 0;
-			int volLvlCount = 0;
-			int dtaLvlCount = 0;
-
-			double askBarSum = 0;
-			double bidBarSum = 0;
-			double volBarSum = 0;
-			double dtaBarSum = 0;
-
-			int askBarCount = 0;
-			int bidBarCount = 0;
-			int volBarCount = 0;
-			int dtaBarCount = 0;
-
-			for (int i = 1; i <= N; i++)
-			{
-				int idx = currentBar - i;
-				if (idx < 0 || !barData.BarItems.IsValidDataPointAt(idx)) continue;
-				var barItem = barData.BarItems.GetValueAt(idx);
-				if (barItem == null || barItem.rowItems == null || barItem.rowItems.Count == 0) continue;
-
-				foreach (var rowItem in barItem.rowItems.Values)
-				{
-					if (rowItem.ask > 0)
-					{
-						askLvlSum += rowItem.ask;
-						askLvlCount++;
-					}
-					if (rowItem.bid > 0)
-					{
-						bidLvlSum += rowItem.bid;
-						bidLvlCount++;
-					}
-					if (rowItem.vol > 0)
-					{
-						volLvlSum += rowItem.vol;
-						volLvlCount++;
-					}
-					if (rowItem.dta != 0)
-					{
-						dtaLvlSum += rowItem.dta;
-						dtaLvlCount++;
-					}
-				}
-
-				if (barItem.ask > 0)
-				{
-					askBarSum += barItem.ask;
-					askBarCount++;
-				}
-				if (barItem.bid > 0)
-				{
-					bidBarSum += barItem.bid;
-					bidBarCount++;
-				}
-				if (barItem.vol > 0)
-				{
-					volBarSum += barItem.vol;
-					volBarCount++;
-				}
-				if (barItem.dtc != 0)
-				{
-					dtaBarSum += barItem.dtc;
-					dtaBarCount++;
-				}
-			}
-
-			rollingData.avgLvlAsk = askLvlCount > 0 ? askLvlSum / askLvlCount : 1.0;
-			rollingData.avgLvlBid = bidLvlCount > 0 ? bidLvlSum / bidLvlCount : 1.0;
-			rollingData.avgLvlVol = volLvlCount > 0 ? volLvlSum / volLvlCount : 1.0;
-			rollingData.avgLvlDta = dtaLvlCount > 0 ? dtaLvlSum / dtaLvlCount : 0.0;
-
-			rollingData.avgBarAsk = askBarCount > 0 ? askBarSum / askBarCount : 1.0;
-			rollingData.avgBarBid = bidBarCount > 0 ? bidBarSum / bidBarCount : 1.0;
-			rollingData.avgBarVol = volBarCount > 0 ? volBarSum / volBarCount : 1.0;
-			rollingData.avgBarDta = dtaBarCount > 0 ? dtaBarSum / dtaBarCount : 0.0;
-
-			return rollingData;
-		}
-	}
-
-	#endregion
-
 	public class FootPrintV2 : Indicator
 	{
 		#region cdArea
@@ -441,7 +144,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 
 		#region Variables
 
-		private bool log = true;
+		private bool log = false;
 		private bool bor = false;
 
 		private BarData barData;
@@ -483,8 +186,17 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		private double lastLoVal = 0.0;
 		private double lastHiVal = 0.0;
 
+		[Browsable(false)]
+		[XmlIgnore]
 		public PatternDetector patternDetector;
+
+		[Browsable(false)]
+		[XmlIgnore]
 		private PatternTooltipHelper tooltipHelper;
+
+		[Browsable(false)]
+		[XmlIgnore]
+		public ChartScale cScale;
 
 		/// menu
 
@@ -528,8 +240,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		private SharpDX.Direct2D1.Brush stkBrush;
 		private SharpDX.Direct2D1.Brush dupBrush;
 		private SharpDX.Direct2D1.Brush ddnBrush;
-
-		public ChartScale cScale;
 
 		#endregion
 
@@ -742,12 +452,9 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 
 				/// ---
 
-				patternDetector = new PatternDetector(barData, TickSize, this.Print);
-
-				/// ---
-
 				ChartControl.Dispatcher.InvokeAsync((Action)(() =>
 				{
+					patternDetector = new PatternDetector(barData, TickSize, this.Print, log);
 					tooltipHelper = new PatternTooltipHelper(this);
 					tooltipHelper.Attach();
 				}));
