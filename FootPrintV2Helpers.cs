@@ -42,8 +42,19 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
         private int lastProcessedBar = -1;
         private RollingData rollingData;
 
-        public List<DetectedPattern> DetectedPatterns = new List<DetectedPattern>();
-
+        private readonly object patternsLock = new object();
+        private readonly List<DetectedPattern> detectedPatterns = new List<DetectedPattern>();
+        public List<DetectedPattern> DetectedPatterns
+        {
+            get
+            {
+                lock (patternsLock)
+                {
+                    return detectedPatterns;
+                }
+            }
+        }
+        
         public PatternDetector(BarData barData, double tickSize, Action<string> printMethod, bool enableLogging = false)
         {
             this.barData = barData;
@@ -78,7 +89,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                 double avgBarVol = rollingData.avgBarVol;
                 double avgBarDta = rollingData.avgBarDta;
 
-                DetectedPatterns.RemoveAll(p => p.BarIndex == currentBar);
+                lock (patternsLock)
+                {
+                    DetectedPatterns.RemoveAll(p => p.BarIndex == currentBar);
+                }
 
                 if (avgLvlAsk > 0 && avgLvlBid > 0)
                 {
@@ -105,7 +119,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                 {
                     if (row.Key == barItem.max && row.Key == barItem.poc) // row.Value.ask > askAbsorptionThreshold && 
                     {
-                        DetectedPatterns.Add(new DetectedPattern
+                        var pattern = new DetectedPattern
                         {
                             BarIndex = bar,
                             Price = row.Key,
@@ -113,13 +127,16 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                             Direction = 1,
                             Details = $"Absorption at high: {row.Value.ask:F0} vol",
                             Timestamp = DateTime.Now
-                        });
+                        };
 
-                        DetectedPatterns.Add(new DetectedPattern { BarIndex = bar, Price = row.Key, PatternType = "Absorption-Ask", Direction = 1, Details = "Absorption at high" });
+                        lock (patternsLock)
+                        {
+                            DetectedPatterns.Add(pattern);
+                        }
                     }
                     if (row.Key == barItem.min && row.Key == barItem.poc) // row.Value.bid > bidAbsorptionThreshold && 
                     {
-                        DetectedPatterns.Add(new DetectedPattern
+                        var pattern = new DetectedPattern
                         {
                             BarIndex = bar,
                             Price = row.Key,
@@ -127,7 +144,12 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                             Direction = -1,
                             Details = $"Absorption at low: {row.Value.bid:F0} vol",
                             Timestamp = DateTime.Now
-                        });
+                        };
+
+                        lock (patternsLock)
+                        {
+                            DetectedPatterns.Add(pattern);
+                        }
                     }
                 }
             }
