@@ -11,6 +11,8 @@ using NinjaTrader.NinjaScript;
 
 namespace NinjaTrader.NinjaScript.Indicators.Infinity
 {
+	#region DetectedPattern
+	
     public class DetectedPattern
     {
         public int BarIndex { get; set; }
@@ -20,6 +22,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
         public DateTime Timestamp { get; set; }
         public int Direction { get; set; } = 0; // 1 = bullish, -1 = bearish, 0 = neutral
     }
+	
+	#endregion
+	
+	#region RollingData
 
     class RollingData
     {
@@ -32,9 +38,15 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
         public double avgBarVol = 0.0;
         public double avgBarDta = 0.0;
     }
-
+	
+	#endregion
+	
+	#region PatternDetector
+	
     public class PatternDetector
     {
+		#region Variables
+		
         private readonly BarData barData;
         private readonly double tickSize;
         private readonly int lookback = 10;
@@ -45,6 +57,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 
         private readonly object patternsLock = new object();
         private readonly List<DetectedPattern> detectedPatterns = new List<DetectedPattern>();
+		
         public List<DetectedPattern> DetectedPatterns
         {
             get
@@ -56,6 +69,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
             }
         }
 
+		#endregion
+		
+		#region PatternDetector
+		
         public PatternDetector(BarData barData, double tickSize, Action<string> printMethod, bool enableLogging = false)
         {
             this.barData = barData;
@@ -63,6 +80,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
             this.print = printMethod;
             this.log = enableLogging;
         }
+		
+		#endregion
+		
+		#region OnBarUpdate
 
         public void OnBarUpdate(int currentBar)
         {
@@ -97,7 +118,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 
                 if (avgLvlAsk > 0 && avgLvlBid > 0)
                 {
-                    DetectAbsorption(currentBar, barItem, avgLvlAsk, avgLvlBid);
+                    DetectAbsorption(currentBar, barItem, rollingData);
                     //DetectImbalanceCluster(currentBar, barItem, avgLevelVolume);
                     //DetectExhaustion(currentBar, barItem, avgLevelVolume);
                 }
@@ -108,25 +129,30 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                     print($"PatternDetector.OnBarUpdate error: {ex.Message}");
             }
         }
+		
+		#endregion
+		
+		#region DetectAbsorption
 
-        private void DetectAbsorption(int bar, dynamic barItem, double avgAskLvlVolume, double avgBidLvlVolume)
+        private void DetectAbsorption(int bar, dynamic barItem, RollingData rollingData)
         {
             try
             {
-                double askAbsorptionThreshold = avgAskLvlVolume * 1.5;
-                double bidAbsorptionThreshold = avgBidLvlVolume * 1.5;
+                double askAbsorptionThreshold = rollingData.avgLvlAsk * 3.0;
+                double bidAbsorptionThreshold = rollingData.avgLvlBid * 3.0;
+				double volAbsorptionThreshold = rollingData.avgLvlVol * 3.0;
 
                 foreach (var row in barItem.rowItems)
                 {
-                    if (row.Key == barItem.max && row.Key == barItem.poc && row.Value.ask >= askAbsorptionThreshold)
+					if (row.Value.ask >= askAbsorptionThreshold && row.Value.bid >= bidAbsorptionThreshold)
                     {
                         var pattern = new DetectedPattern
                         {
                             BarIndex = bar,
                             Price = row.Key,
-                            PatternType = "Absorption-Ask",
-                            Direction = 1,
-                            Details = $"Absorption at high: {row.Value.ask:F0}, Avg Ask: {avgAskLvlVolume:F0}",
+                            PatternType = "Absorption",
+                            Direction = 0,
+                            Details = $"Absorption: {row.Value.vol:F0}, Avg Vol: {rollingData.avgLvlVol:F0}",
                             Timestamp = DateTime.Now
                         };
 
@@ -135,7 +161,25 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                             DetectedPatterns.Add(pattern);
                         }
                     }
-                    if (row.Key == barItem.min && row.Key == barItem.poc && row.Value.bid >= bidAbsorptionThreshold)
+					
+                    else if (row.Value.ask >= askAbsorptionThreshold && row.Value.bid < bidAbsorptionThreshold)
+                    {
+                        var pattern = new DetectedPattern
+                        {
+                            BarIndex = bar,
+                            Price = row.Key,
+                            PatternType = "Absorption-Ask",
+                            Direction = 1,
+                            Details = $"Absorption at ask: {row.Value.ask:F0}, Avg Ask: {rollingData.avgLvlAsk:F0}",
+                            Timestamp = DateTime.Now
+                        };
+
+                        lock (patternsLock)
+                        {
+                            DetectedPatterns.Add(pattern);
+                        }
+                    }
+                    else if (row.Value.bid >= bidAbsorptionThreshold && row.Value.ask < askAbsorptionThreshold) 
                     {
                         var pattern = new DetectedPattern
                         {
@@ -143,7 +187,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                             Price = row.Key,
                             PatternType = "Absorption-Bid",
                             Direction = -1,
-                            Details = $"Absorption at low: {row.Value.bid:F0}, Avg Bid: {avgBidLvlVolume:F0}",
+                            Details = $"Absorption at bid: {row.Value.bid:F0}, Avg Bid: {rollingData.avgLvlBid:F0}",
                             Timestamp = DateTime.Now
                         };
 
@@ -161,86 +205,9 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
             }
         }
 
-        private void DetectImbalanceCluster(int bar, dynamic barItem, double avgLevelVolume)
-        {
-            try
-            {
-                var prices = new List<double>();
-                foreach (var kvp in barItem.rowItems)
-                {
-                    prices.Add(kvp.Key);
-                }
-
-                var sortedPrices = prices.OrderByDescending(x => x).ToList();
-                int clusterCount = 0;
-                for (int i = 0; i < Math.Min(5, sortedPrices.Count); i++)
-                {
-                    var price = sortedPrices[i];
-                    NinjaTrader.NinjaScript.Indicators.Infinity.BarData.RowItem rowItem;
-                    if (barItem.rowItems.TryGetValue(price, out rowItem))
-                    {
-                        double imbalanceRatio = rowItem.ask / Math.Max(rowItem.bid, 1);
-                        if (imbalanceRatio > 3.0) clusterCount++;
-                    }
-                }
-
-                if (clusterCount >= 3)
-                {
-                    DetectedPatterns.Add(new DetectedPattern
-                    {
-                        BarIndex = bar,
-                        Price = sortedPrices[0],
-                        PatternType = "Imbalance-Cluster",
-                        Direction = 1,
-                        Details = $"Cluster of {clusterCount} imbalances",
-                        Timestamp = DateTime.Now
-                    });
-
-                    if (log && print != null)
-                        print($"Imbalance cluster detected at bar {bar}, {clusterCount} levels");
-                }
-            }
-            catch (Exception ex)
-            {
-                if (log && print != null)
-                    print($"DetectImbalanceCluster error: {ex.Message}");
-            }
-        }
-
-        private void DetectExhaustion(int bar, dynamic barItem, double avgLevelVolume)
-        {
-            try
-            {
-                double exhaustionThreshold = avgLevelVolume * 4.0;
-
-                foreach (var row in barItem.rowItems)
-                {
-                    double totalVol = row.Value.ask + row.Value.bid;
-                    if (totalVol > exhaustionThreshold)
-                    {
-                        string direction = row.Value.ask > row.Value.bid ? "Bullish" : "Bearish";
-
-                        DetectedPatterns.Add(new DetectedPattern
-                        {
-                            BarIndex = bar,
-                            Price = row.Key,
-                            PatternType = $"Exhaustion-{direction}",
-                            Direction = row.Value.ask > row.Value.bid ? 1 : -1,
-                            Details = $"High volume: {totalVol:F0}",
-                            Timestamp = DateTime.Now
-                        });
-
-                        if (log && print != null)
-                            print($"Exhaustion pattern detected at bar {bar}, price {row.Key:F2}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                if (log && print != null)
-                    print($"DetectExhaustion error: {ex.Message}");
-            }
-        }
+        #endregion
+		
+		#region GetRollingData
 
         private RollingData GetRollingData(int currentBar, int N)
         {
@@ -331,7 +298,14 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 
             return rollingData;
         }
+		
+		#endregion
     }
+	
+	#endregion
+	
+	#region PatternTooltipHelper
+	
     public class PatternTooltipHelper
     {
         private FootPrintV2 indicator;
@@ -713,4 +687,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
             }
         }
     }
+	
+	#endregion
 }
