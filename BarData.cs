@@ -1,4 +1,5 @@
 #region Using declarations
+
 using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
@@ -24,32 +25,51 @@ using NinjaTrader.Core.FloatingPoint;
 using NinjaTrader.NinjaScript.DrawingTools;
 using SharpDX.DirectWrite;
 using System.Diagnostics;
+
 #endregion
 
 namespace NinjaTrader.NinjaScript.Indicators.Infinity
 {
 	#region Globals
+	
 	public static class BarDataGlobals
 	{
 		public static double tsv = 0.0;
 	}
+	
 	#endregion
 
 	#region CategoryOrder
+	
 	[Gui.CategoryOrder("Properties", 1)]
 	[Gui.CategoryOrder("Custom Profile Properties", 2)]
+	
 	#endregion
 
 	public class BarData : Indicator
 	{
-		// ------------------- Internal helpers ----------------------
-		// Use constants for magic numbers
-		private const double DefaultValueAreaRatio = 0.682;
-		private const int MaxValueAreaIterations = 1000;
-		private const int MaxPrevIndexSearch = 50;
-		// -----------------------------------------------------------
-
+		#region TmpData
+		
+		private class TmpData
+		{
+			public double prc = 0.0;
+			public double vol = 0.0;
+			public string type = "";
+			
+			public TmpData() { }
+			
+			public TmpData(double prc, double vol, string type)
+			{
+				this.prc = prc;
+				this.vol = vol;
+				this.type = type;
+			}
+		}
+		
+		#endregion
+		
 		#region RowItem
+		
 		public class RowItem
 		{
 			public double vol = 0.0;
@@ -86,9 +106,11 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				this.vol += vol;
 			}
 		}
+		
 		#endregion
 
 		#region BarItem
+		
 		public class BarItem
 		{
 			public int idx = 0;
@@ -127,7 +149,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					cdo = 0.0;
 			}
 
-			/// --- Add methods ---
 			public void addAsk(double prc, double vol, bool showPrevProfile, bool showCurrProfile, bool showCustProfile)
 			{
 				AddVolumeCommon(prc, vol);
@@ -249,9 +270,11 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				return (bidPrc < this.max && bidVol >= minVol && imbRat >= minImbalanceRatio);
 			}
 		}
+		
 		#endregion
 
 		#region Profile
+		
 		public class Profile
 		{
 			public int bar = 0;
@@ -444,18 +467,29 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				return (bidPrc < this.max && imbRat >= minImbalanceRatio);
 			}
 		}
+		
 		#endregion
 
 		#region Variables
+		
 		private bool log = true;
 		private bool rdy = false;
 
-		private double _vol, _ask, _bid, _cls;
+		private int prevIndex;
+		private bool isHistoricalTickReplay;
+		private double _vol, _ask, _bid, _cls, currPrc;
 		private BarItem _currBarItem;
 		private Series<BarItem> barItems;
+		private List<TmpData> tmpData = new List<TmpData>();
+		
+		private const double DefaultValueAreaRatio = 0.682;
+		private const int MaxValueAreaIterations = 500;
+		private const int MaxPrevIndexSearch = 25;
+		
 		#endregion
 
 		#region OnStateChange
+		
 		protected override void OnStateChange()
 		{
 			if (State == State.SetDefaults)
@@ -489,67 +523,187 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			}
 			else if (State == State.DataLoaded)
 			{
-				barItems = new Series<BarItem>(BarsArray[0], MaximumBarsLookBack.Infinite);
+				barItems = new Series<BarItem>(BarsArray[0], MaximumBarsLookBack);
 				BarDataGlobals.tsv = TickSize;
 
 				if (log)
 					ClearOutputWindow();
 			}
+			else if(State == State.Terminated)
+			{
+				tmpData.Clear();
+			}
 		}
+		
 		#endregion
 
 		#region OnMarketData
+		
 		protected override void OnMarketData(MarketDataEventArgs marketDataUpdate)
 		{
-			if (!rdy || !Bars.IsTickReplay || barItems[0] == null || CurrentBars[0] == null)
-				return;
-
+			if(marketDataUpdate.MarketDataType != MarketDataType.Last) return;
+			if(BarsInProgress != 0) return;
+			if(CurrentBar < 1) return;
+			
 			try
 			{
-				if (marketDataUpdate.MarketDataType == MarketDataType.Last)
+				isHistoricalTickReplay = (Bars.IsTickReplay && State == State.Historical);
+				
+				if(barItems[0] == null)
 				{
-					double prc = Instrument.MasterInstrument.RoundToTickSize(marketDataUpdate.Price);
-					double ask = Instrument.MasterInstrument.RoundToTickSize(marketDataUpdate.Ask);
-					double bid = Instrument.MasterInstrument.RoundToTickSize(marketDataUpdate.Bid);
-					double vol = marketDataUpdate.Volume;
-
-					if (prc >= ask)
-						barItems[0].addAsk(prc, vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
-					else if (prc <= bid)
-						barItems[0].addBid(prc, vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
-					else
-						barItems[0].addVol(prc, vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
-
-					if (State == State.Historical && barItems[0].clc == true && barItems[1] != null)
+					barItems[0] = new BarItem(CurrentBar, Bars.IsFirstBarOfSession);
+					
+					prevIndex = 1;
+					
+					for(var i = 1; i < Math.Min(CurrentBar, MaxPrevIndexSearch); i++)
 					{
-						barItems[1].calc();
-						if (calcCustProfile) barItems[1].custProfile.calc();
-						if (calcCurrProfile || calcPrevProfile) barItems[1].currProfile.calc();
-						barItems[0].clc = false;
+						if(barItems[i] != null)
+						{
+							prevIndex = i;
+							break;
+						}
 					}
-					if (State == State.Realtime)
+					
+					if(barItems[prevIndex] != null)
 					{
-						barItems[0].calc();
-						if (calcCustProfile) barItems[0].custProfile.calc();
-						if (calcCurrProfile || calcPrevProfile) barItems[0].currProfile.calc();
+						if(isHistoricalTickReplay)
+						{
+							if(calcCustProfile) barItems[prevIndex].custProfile.calc();	
+							if(calcCurrProfile) barItems[prevIndex].currProfile.calc();
+						}
+						
+						// PrevProfile
+						
+						if(calcPrevProfile)
+						{
+							if(Bars.IsFirstBarOfSession)
+							{
+								barItems[0].prevProfile = barItems[prevIndex].currProfile.Clone();
+							}
+							else
+							{
+								barItems[0].prevProfile = barItems[prevIndex].prevProfile.Clone();
+							}
+						}
+						
+						// CurrProfile
+						
+						if(calcCurrProfile)
+						{
+							if(!Bars.IsFirstBarOfSession)
+							{
+								barItems[0].currProfile = barItems[prevIndex].currProfile.Clone();
+							}
+						}
+						
+						// Delta
+							
+						barItems[0].cdo = barItems[prevIndex].cdc;
+						barItems[0].cdl = barItems[prevIndex].cdc;
+						barItems[0].cdh = barItems[prevIndex].cdc;
+						barItems[0].cdc = barItems[prevIndex].cdc;
+					}
+					
+					// ---
+					
+					if(tmpData.Count > 0)
+					{
+						foreach(TmpData tmpItem in tmpData)
+						{
+							if(tmpItem.prc >= Low[0] && tmpItem.prc <= High[0])
+							{
+								if(tmpItem.type == "ask")
+								{
+									barItems[0].addAsk(tmpItem.prc, tmpItem.vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
+								}
+								if(tmpItem.type == "bid")
+								{
+									barItems[0].addBid(tmpItem.prc, tmpItem.vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
+								}
+								if(tmpItem.type == "vol")
+								{
+									barItems[0].addVol(tmpItem.prc, tmpItem.vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
+								}
+							}
+						}
+					}
+					
+					tmpData.Clear();
+					
+					// ---
+					
+					if(calcCustProfile)
+					{
+						initCustomProfile(CurrentBar);
 					}
 				}
+				
+				_cls = marketDataUpdate.Price;
+				_ask = marketDataUpdate.Ask;
+				_bid = marketDataUpdate.Bid;
+				_vol = marketDataUpdate.Volume;
+				
+				if(_cls > High[0] || _cls < Low[0])
+				{
+					if(log) Print("skip data: " + _cls.ToString("n2") + " high: " + High[0].ToString("n2") + " low: " + Low[0].ToString("n2"));
+					return;
+				}
+				
+				if (_cls >= _ask)
+				{
+					barItems[0].addAsk(_cls, _vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
+				}
+				else if (_cls <= _bid)
+				{
+					barItems[0].addBid(_cls, _vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
+				}
+				else
+				{
+					barItems[0].addVol(_cls, _vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
+				}
+					
+				// set empty row items
+				
+				if(High[0] > Low[0])
+				{
+					currPrc = High[0];
+					
+					while(currPrc >= Low[0])
+					{
+						if(!barItems[0].rowItems.ContainsKey(currPrc))
+						{
+							barItems[0].addVol(currPrc, 0, calcPrevProfile, calcCurrProfile, calcCustProfile);
+						}
+						currPrc -= TickSize;
+					}
+				}
+				
+				barItems[0].opn = (barItems[0].opn != Open[0]) ? Open[0] : barItems[0].opn;
+				barItems[0].cls = (barItems[0].cls != Close[0]) ? Close[0] : barItems[0].cls;
+				
+				// ---
+				
+				barItems[0].calc();
+				if(calcCustProfile && !isHistoricalTickReplay) barItems[0].custProfile.calc();	
+				if(calcCurrProfile && !isHistoricalTickReplay) barItems[0].currProfile.calc();	
 			}
-			catch (Exception exception)
+			catch(Exception exception)
 			{
-				if (log) Print(exception.ToString());
+				if(log) Print(exception.ToString());
 			}
 		}
+		
 		#endregion
 
 		#region OnBarUpdate
+		
 		protected override void OnBarUpdate()
 		{
 			try
 			{
-				if (CurrentBars[0] < 1 || CurrentBars[1] < 1) return;
+				if(CurrentBars[0] < 1 || CurrentBars[1] < 1) return;
 
-				if (Calculate != Calculate.OnEachTick)
+				if(Calculate != Calculate.OnEachTick)
 				{
 					Draw.TextFixed(this, "calculateMessage", "Please set Calculate to 'On each tick' ...", TextPosition.Center);
 					return;
@@ -557,240 +711,150 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 
 				try
 				{
-					#region tick replay
-					if (Bars.IsTickReplay)
+					if (State == State.Historical && !Bars.IsTickReplay)
 					{
-						rdy = true;
-
-						if (barItems[0] == null)
+						if (BarsInProgress == 0)
 						{
-							bool isFirstBarOfSession = Bars.IsFirstBarOfSession;
-							barItems[0] = new BarItem(CurrentBar, isFirstBarOfSession);
-
-							if (barItems[1] != null)
+							barItems[0] = new BarItem(CurrentBar, Bars.IsFirstBarOfSession);
+							
+							prevIndex = 1;
+							
+							for(var i = 1; i < Math.Min(CurrentBar, MaxPrevIndexSearch); i++)
 							{
-								barItems[0].avg = barItems[1].avg;
-								barItems[1].cls = Close[1];
-
-								if (calcCustProfile) barItems[1].custProfile.cls = Close[1];
-								if (calcCurrProfile || calcPrevProfile) barItems[1].currProfile.cls = Close[1];
-							}
-
-							barItems[0].opn = Open[0];
-							barItems[0].cls = Close[0];
-
-							if (calcCustProfile)
-							{
-								barItems[0].custProfile.opn = Open[0];
-								barItems[0].custProfile.cls = Close[0];
-							}
-							if (calcCurrProfile || calcPrevProfile)
-							{
-								barItems[0].currProfile.opn = Open[0];
-								barItems[0].currProfile.cls = Close[0];
-							}
-
-							if (isFirstBarOfSession)
-							{
-								if (calcCurrProfile || calcPrevProfile)
-									barItems[0].currProfile.bar = CurrentBar;
-
-								if (calcPrevProfile && barItems[1] != null)
+								if (barItems[i] != null)
 								{
-									barItems[0].prevProfile = barItems[1].currProfile.Clone();
-									barItems[0].prevProfile.calc();
+									prevIndex = i;
+									break;
 								}
 							}
-							else
+							
+							if(barItems[prevIndex] != null)
 							{
-								if (barItems[1] != null)
+								// PrevProfile
+								
+								if(calcPrevProfile)
 								{
-									barItems[0].cdo = barItems[1].cdc;
-									barItems[0].cdl = barItems[1].cdc;
-									barItems[0].cdh = barItems[1].cdc;
-									barItems[0].cdc = barItems[1].cdc;
-									if (calcCurrProfile || calcPrevProfile)
-										barItems[0].currProfile = barItems[1].currProfile.Clone();
-									if (calcPrevProfile)
-										barItems[0].prevProfile = barItems[1].prevProfile;
-								}
-								if (calcCustProfile)
-									initCustomProfile(CurrentBar);
-							}
-						}
-					}
-					#endregion
-
-					#region no tick replay
-					if (!Bars.IsTickReplay)
-					{
-						#region realtime
-						if (State == State.Realtime)
-						{
-							if (barItems[0] == null)
-							{
-								barItems[0] = new BarItem(CurrentBars[0], BarsArray[0].IsFirstBarOfSession);
-								initCustomProfile(CurrentBars[0]);
-
-								if (calcCurrProfile || calcPrevProfile)
-								{
-									if (BarsArray[0].IsFirstBarOfSession)
+									if(Bars.IsFirstBarOfSession)
 									{
-										if (barItems[1] != null && calcPrevProfile)
-										{
-											barItems[0].prevProfile = barItems[1].currProfile.Clone();
-											barItems[0].prevProfile.calc();
-										}
-										barItems[0].currProfile.bar = CurrentBars[0];
+										barItems[0].prevProfile = barItems[prevIndex].currProfile.Clone();
+										barItems[0].prevProfile.calc();
 									}
 									else
 									{
-										int prevIndex = 1;
-										for (var i = 1; i < MaxPrevIndexSearch; i++)
-										{
-											if (barItems[i] != null)
-											{
-												prevIndex = i;
-												break;
-											}
-										}
-										if (barItems[prevIndex] != null)
-										{
-											barItems[0].cdo = barItems[prevIndex].cdc;
-											barItems[0].cdl = barItems[prevIndex].cdc;
-											barItems[0].cdh = barItems[prevIndex].cdc;
-											barItems[0].cdc = barItems[prevIndex].cdc;
-											barItems[0].currProfile = barItems[prevIndex].currProfile.Clone();
-											barItems[0].currProfile.calc();
-											if (calcPrevProfile)
-												barItems[0].prevProfile = barItems[prevIndex].prevProfile.Clone();
-										}
+										barItems[0].prevProfile = barItems[prevIndex].prevProfile.Clone();
+										barItems[0].prevProfile.calc();
 									}
 								}
-
-								if (barItems[1] != null)
+								
+								// CurrProfile
+								
+								if(calcCurrProfile)
 								{
-									barItems[1].calc();
-									if (calcCustProfile) barItems[1].custProfile.calc();
-									if (calcCurrProfile || calcPrevProfile) barItems[1].currProfile.calc();
-								}
-							}
-
-							if (BarsInProgress == 1)
-							{
-								_vol = Bars.GetVolume(CurrentBar);
-								_ask = Bars.GetAsk(CurrentBar);
-								_bid = Bars.GetBid(CurrentBar);
-								_cls = Bars.GetClose(CurrentBar);
-
-								if (_cls >= _ask)
-									barItems[0].addAsk(_cls, _vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
-								else if (_cls <= _bid)
-									barItems[0].addBid(_cls, _vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
-								else
-									barItems[0].addVol(_cls, _vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
-
-								barItems[0].calc();
-								if (calcCustProfile) barItems[0].custProfile.calc();
-								if (calcCurrProfile || calcPrevProfile) barItems[0].currProfile.calc();
-							}
-						}
-						#endregion
-
-						#region historical
-						if (State == State.Historical)
-						{
-							if (BarsInProgress == 0)
-							{
-								if (_currBarItem != null)
-								{
-									barItems[0] = _currBarItem;
-									initCustomProfile(CurrentBars[0]);
-									barItems[0].calc();
-									if (calcCustProfile) barItems[0].custProfile.calc();
-									if (calcCurrProfile || calcPrevProfile) barItems[0].currProfile.calc();
-									_currBarItem = null;
-								}
-							}
-							if (BarsInProgress == 1)
-							{
-								if (_currBarItem == null)
-								{
-									_currBarItem = new BarItem(CurrentBars[0], BarsArray[0].IsLastBarOfSession);
-
-									if (calcCurrProfile || calcPrevProfile)
+									if(!Bars.IsFirstBarOfSession)
 									{
-										if (BarsArray[0].IsLastBarOfSession)
-										{
-											if (barItems[0] != null && calcPrevProfile)
-											{
-												_currBarItem.prevProfile = barItems[0].currProfile.Clone();
-												_currBarItem.prevProfile.calc();
-											}
-											_currBarItem.currProfile.bar = CurrentBars[0];
-										}
-										else
-										{
-											int prevIndex = 0;
-											for (var i = 0; i < MaxPrevIndexSearch; i++)
-											{
-												if (CurrentBars[0] - i >= 0 && barItems[i] != null)
-												{
-													prevIndex = i;
-													break;
-												}
-											}
-											if (barItems[prevIndex] != null)
-											{
-												_currBarItem.cdo = barItems[prevIndex].cdc;
-												_currBarItem.cdl = barItems[prevIndex].cdc;
-												_currBarItem.cdh = barItems[prevIndex].cdc;
-												_currBarItem.cdc = barItems[prevIndex].cdc;
-												_currBarItem.currProfile = barItems[prevIndex].currProfile.Clone();
-												_currBarItem.currProfile.calc();
-												if (calcPrevProfile)
-													_currBarItem.prevProfile = barItems[prevIndex].prevProfile.Clone();
-											}
-										}
+										barItems[0].currProfile = barItems[prevIndex].currProfile.Clone();
+										barItems[0].currProfile.calc();
 									}
 								}
+								
+								// Delta
+									
+								barItems[0].cdo = barItems[prevIndex].cdc;
+								barItems[0].cdl = barItems[prevIndex].cdc;
+								barItems[0].cdh = barItems[prevIndex].cdc;
+								barItems[0].cdc = barItems[prevIndex].cdc;
+							}
+							
+							// Process temporary data
+							
+							foreach(TmpData tmpItem in tmpData)
+							{
+								if(tmpItem.prc >= Low[0] && tmpItem.prc <= High[0])
+								{
+									if(tmpItem.type == "ask")
+									{
+										barItems[0].addAsk(tmpItem.prc, tmpItem.vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
+									}
+									if(tmpItem.type == "bid")
+									{
+										barItems[0].addBid(tmpItem.prc, tmpItem.vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
+									}
+									if(tmpItem.type == "vol")
+									{
+										barItems[0].addVol(tmpItem.prc, tmpItem.vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
+									}
+								}
+							}
+							
+							tmpData.Clear();
+							
+							// set empty row items
+							
+							if(High[0] > Low[0])
+							{
+								currPrc = High[0];
+								
+								while(currPrc >= Low[0])
+								{
+									if(!barItems[0].rowItems.ContainsKey(currPrc))
+									{
+										barItems[0].addVol(currPrc, 0, calcPrevProfile, calcCurrProfile, calcCustProfile);
+									}
+									currPrc -= TickSize;
+								}
+							}
+							
+							barItems[0].opn = (barItems[0].opn != Open[0]) ? Open[0] : barItems[0].opn;
+							barItems[0].cls = (barItems[0].cls != Close[0]) ? Close[0] : barItems[0].cls;
+							
+							// ---
+							
+							initCustomProfile(CurrentBar);
+							barItems[0].calc();
+						}
+						if(BarsInProgress == 1)
+						{
+							_vol = Bars.GetVolume(CurrentBar);
+							_ask = Bars.GetAsk(CurrentBar);
+							_bid = Bars.GetBid(CurrentBar);
+							_cls = Bars.GetClose(CurrentBar);
 
-								_vol = Bars.GetVolume(CurrentBar);
-								_ask = Bars.GetAsk(CurrentBar);
-								_bid = Bars.GetBid(CurrentBar);
-								_cls = Bars.GetClose(CurrentBar);
-
-								if (_cls >= _ask)
-									_currBarItem.addAsk(_cls, _vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
-								else if (_cls <= _bid)
-									_currBarItem.addBid(_cls, _vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
-								else
-									_currBarItem.addVol(_cls, _vol, calcPrevProfile, calcCurrProfile, calcCustProfile);
+							if (_cls >= _ask)
+							{
+								tmpData.Add(new TmpData(_cls, _vol, "ask"));
+							}
+							else if (_cls <= _bid)
+							{
+								tmpData.Add(new TmpData(_cls, _vol, "bid"));
+							}
+							else
+							{
+								tmpData.Add(new TmpData(_cls, _vol, "vol"));
 							}
 						}
-						#endregion
 					}
-					#endregion
 				}
-				catch (Exception exception)
+				catch(Exception exception)
 				{
-					if (log) Print("collect data - " + exception.ToString());
+					if(log) Print("collect data - " + exception.ToString());
 				}
 			}
-			catch (Exception exception)
+			catch(Exception exception)
 			{
-				if (log) NinjaTrader.Code.Output.Process(exception.ToString(), PrintTo.OutputTab1);
+				if(log) NinjaTrader.Code.Output.Process(exception.ToString(), PrintTo.OutputTab1);
 			}
 		}
+		
 		#endregion
 
 		#region initCustomProfile
+		
 		private void initCustomProfile(int bar)
 		{
 			try
 			{
-				if (barItems[0] == null) return;
-
+				if(barItems[0] == null) return;
+				
 				barItems[0].custProfile.Reset();
 
 				int idx = bar;
@@ -801,12 +865,12 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				double rng = 0.0;
 				double pct = barItems[0].currProfile.vol * (custProfilePctValue / 100.0);
 
-				while (idx > 1)
+				while(idx > 1)
 				{
-					if (barItems.IsValidDataPointAt(idx))
+					if(barItems.IsValidDataPointAt(idx))
 					{
 						BarItem barItem = barItems.GetValueAt(idx);
-						if (barItem != null)
+						if(barItem != null)
 						{
 							var custProfile = barItems[0].custProfile;
 							custProfile.min = Math.Min(barItem.min, custProfile.min);
@@ -819,7 +883,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							custProfile.bid += barItem.bid;
 							custProfile.dta += barItem.dtc;
 
-							foreach (var ri in barItem.rowItems)
+							foreach(var ri in barItem.rowItems)
 							{
 								custProfile.rowItems.GetOrAdd(ri.Key, new RowItem());
 								custProfile.rowItems[ri.Key].vol += ri.Value.vol;
@@ -833,7 +897,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							max = Math.Max(barItem.max, max);
 							rng = (max - min) / TickSize;
 							cnt++;
-
+							
 							if ((vol >= pct && cnt >= custProfileBarValue && vol >= custProfileVolValue && rng >= custProfileRngValue) || barItem.ifb)
 							{
 								custProfile.bar = idx;
@@ -841,18 +905,22 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 							}
 						}
 					}
+					
 					idx--;
 				}
+				
 				barItems[0].custProfile.calc();
 			}
-			catch (Exception exception)
+			catch(Exception exception)
 			{
-				if (log) NinjaTrader.Code.Output.Process(exception.ToString(), PrintTo.OutputTab1);
+				if(log) NinjaTrader.Code.Output.Process(exception.ToString(), PrintTo.OutputTab1);
 			}
 		}
+		
 		#endregion
 
 		#region Properties
+		
 		[Browsable(false)]
 		[XmlIgnore]
 		public Series<BarItem> BarItems => barItems;
@@ -888,63 +956,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		[Range(1.0, double.MaxValue)]
 		[Display(Name = "Range Value (Ticks)", GroupName = "Custom Profile Properties", Order = 3)]
 		public double custProfileRngValue { get; set; }
+		
 		#endregion
 	}
 }
-
-#region NinjaScript generated code. Neither change nor remove.
-
-namespace NinjaTrader.NinjaScript.Indicators
-{
-	public partial class Indicator : NinjaTrader.Gui.NinjaScript.IndicatorRenderBase
-	{
-		private Infinity.BarData[] cacheBarData;
-		public Infinity.BarData BarData(bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
-		{
-			return BarData(Input, calcPrevProfile, calcCurrProfile, calcCustProfile, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue);
-		}
-
-		public Infinity.BarData BarData(ISeries<double> input, bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
-		{
-			if (cacheBarData != null)
-				for (int idx = 0; idx < cacheBarData.Length; idx++)
-					if (cacheBarData[idx] != null && cacheBarData[idx].calcPrevProfile == calcPrevProfile && cacheBarData[idx].calcCurrProfile == calcCurrProfile && cacheBarData[idx].calcCustProfile == calcCustProfile && cacheBarData[idx].custProfilePctValue == custProfilePctValue && cacheBarData[idx].custProfileBarValue == custProfileBarValue && cacheBarData[idx].custProfileVolValue == custProfileVolValue && cacheBarData[idx].custProfileRngValue == custProfileRngValue && cacheBarData[idx].EqualsInput(input))
-						return cacheBarData[idx];
-			return CacheIndicator<Infinity.BarData>(new Infinity.BarData() { calcPrevProfile = calcPrevProfile, calcCurrProfile = calcCurrProfile, calcCustProfile = calcCustProfile, custProfilePctValue = custProfilePctValue, custProfileBarValue = custProfileBarValue, custProfileVolValue = custProfileVolValue, custProfileRngValue = custProfileRngValue }, input, ref cacheBarData);
-		}
-	}
-}
-
-namespace NinjaTrader.NinjaScript.MarketAnalyzerColumns
-{
-	public partial class MarketAnalyzerColumn : MarketAnalyzerColumnBase
-	{
-		public Indicators.Infinity.BarData BarData(bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
-		{
-			return indicator.BarData(Input, calcPrevProfile, calcCurrProfile, calcCustProfile, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue);
-		}
-
-		public Indicators.Infinity.BarData BarData(ISeries<double> input, bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
-		{
-			return indicator.BarData(input, calcPrevProfile, calcCurrProfile, calcCustProfile, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue);
-		}
-	}
-}
-
-namespace NinjaTrader.NinjaScript.Strategies
-{
-	public partial class Strategy : NinjaTrader.Gui.NinjaScript.StrategyRenderBase
-	{
-		public Indicators.Infinity.BarData BarData(bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
-		{
-			return indicator.BarData(Input, calcPrevProfile, calcCurrProfile, calcCustProfile, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue);
-		}
-
-		public Indicators.Infinity.BarData BarData(ISeries<double> input, bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
-		{
-			return indicator.BarData(input, calcPrevProfile, calcCurrProfile, calcCustProfile, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue);
-		}
-	}
-}
-
-#endregion
