@@ -1804,7 +1804,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					}
 				}
 
-				if(patternDetector != null)
+				if (patternDetector != null)
 				{
 					patternDetector.OnBarUpdate(CurrentBar);
 				}
@@ -3972,7 +3972,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 
 				#endregion
 
-				
 				#region fill empty prices
 				/*
 				if (BarsArray[0].GetHigh(i) > currBarItem.max)
@@ -3998,7 +3997,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				}
 				*/
 				#endregion
-				
 
 				foreach (KeyValuePair<double, NinjaTrader.NinjaScript.Indicators.Infinity.BarData.RowItem> ri in currBarItem.rowItems)
 				{
@@ -5588,6 +5586,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 
 		#endregion
 
+		#region drawPatterns
+
 		private void drawPatterns(ChartControl chartControl, ChartScale chartScale)
 		{
 			/*
@@ -5651,6 +5651,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				}
 			}
 		}
+
+		#endregion
 
 		#region Properties
 

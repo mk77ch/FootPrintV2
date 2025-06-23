@@ -133,6 +133,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			public double cdc = 0.0;
 			public double poc = 0.0;
 			public double avg = 0.0;
+			public double med = 0.0;
 
 			public ConcurrentDictionary<double, RowItem> rowItems = new ConcurrentDictionary<double, RowItem>();
 
@@ -179,7 +180,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				this.rowItems.GetOrAdd(prc, new RowItem()).addVol(vol);
 			}
 
-			// Helper for volume handling and updating min/max/range/opn/cls
 			private void AddVolumeCommon(double prc, double vol)
 			{
 				this.vol += vol;
@@ -190,7 +190,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				this.cls = prc;
 			}
 
-			// Helper for updating min/max delta, cdo/cdh/cdl/cdc, etc.
 			private void UpdateDeltaExtremes()
 			{
 				this.dtl = (this.dtc < this.dtl) ? dtc : dtl;
@@ -200,7 +199,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				this.cdh = (this.cdo + this.dth > this.cdh) ? this.cdo + this.dth : this.cdh;
 			}
 
-			// Helper for updating profiles
 			private void UpdateProfiles(double prc, double vol, bool showPrevProfile, bool showCurrProfile, bool showCustProfile, Action<Profile, double, double> profileAction)
 			{
 				if (showCustProfile)
@@ -210,10 +208,12 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			}
 
 			/// --- Calculations ---
+			
 			public void calc()
 			{
 				setAvg();
 				setPoc();
+				setMed();
 			}
 
 			public void setAvg()
@@ -226,6 +226,24 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			{
 				if (!this.rowItems.IsEmpty)
 					this.poc = this.rowItems.Aggregate((l, r) => l.Value.vol > r.Value.vol ? l : r).Key;
+			}
+			
+			public void setMed()
+			{
+			    if (this.rowItems.IsEmpty) return;
+			    var sorted = rowItems.OrderBy(kvp => kvp.Key).ToList();
+			    double t = sorted.Sum(kvp => kvp.Value.vol);
+			    double h = t / 2.0;
+			    double c = 0.0;
+			    foreach (var kvp in sorted)
+			    {
+			        c += kvp.Value.vol;
+			        if (c >= h)
+					{
+			            this.med = kvp.Key;
+						break;
+					}
+			    }
 			}
 
 			public double getMaxVol()
@@ -291,10 +309,12 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			public double vah = 0.0;
 			public double val = 0.0;
 			public double avg = 0.0;
+			public double med = 0.0;
 
 			public ConcurrentDictionary<double, RowItem> rowItems = new ConcurrentDictionary<double, RowItem>();
 
 			/// --- Add methods ---
+			
 			public void addAsk(double prc, double vol)
 			{
 				AddVolumeCommon(prc, vol);
@@ -328,10 +348,12 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			}
 
 			/// --- Calculations ---
+			
 			public void calc()
 			{
 				setAvg();
 				setPoc();
+				setMed();
 				setValueArea();
 			}
 
@@ -345,6 +367,24 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			{
 				if (!this.rowItems.IsEmpty)
 					this.poc = this.rowItems.Aggregate((l, r) => l.Value.vol > r.Value.vol ? l : r).Key;
+			}
+			
+			public void setMed()
+			{
+			    if (this.rowItems.IsEmpty) return;
+			    var sorted = rowItems.OrderBy(kvp => kvp.Key).ToList();
+			    double t = sorted.Sum(kvp => kvp.Value.vol);
+			    double h = t / 2.0;
+			    double c = 0.0;
+			    foreach (var kvp in sorted)
+			    {
+			        c += kvp.Value.vol;
+			        if (c >= h)
+					{
+			            this.med = kvp.Key;
+						break;
+					}
+			    }
 			}
 
 			public void setValueArea()
@@ -420,6 +460,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				clone.vah = this.vah;
 				clone.val = this.val;
 				clone.avg = this.avg;
+				clone.med = this.med;
 
 				foreach (var ri in this.rowItems)
 					clone.rowItems.TryAdd(ri.Key, new RowItem(ri.Value.vol, ri.Value.ask, ri.Value.bid));
@@ -441,6 +482,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				this.vah = 0.0;
 				this.val = 0.0;
 				this.avg = 0.0;
+				this.med = 0.0;
 				this.rowItems.Clear();
 			}
 
