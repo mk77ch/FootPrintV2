@@ -144,7 +144,12 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 
                 foreach (var row in barItem.rowItems)
                 {
-					if (row.Value.ask >= askAbsorptionThreshold && row.Value.bid >= bidAbsorptionThreshold)
+					if (row.Key != barItem.poc)
+                    {
+						//return;	
+					}
+					
+					if (row.Value.vol >= volAbsorptionThreshold && (row.Value.bid >= bidAbsorptionThreshold || row.Value.ask >= askAbsorptionThreshold)) 
                     {
                         var pattern = new DetectedPattern
                         {
@@ -152,7 +157,7 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                             Price = row.Key,
                             PatternType = "Absorption",
                             Direction = 0,
-                            Details = $"Absorption: {row.Value.vol:F0}, Avg Vol: {rollingData.avgLvlVol:F0}",
+                            Details = $"High Volume at {row.Key:F2}: {row.Value.vol:F0}, Avg Vol: {rollingData.avgLvlVol:F0}",
                             Timestamp = DateTime.Now
                         };
 
@@ -161,7 +166,6 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                             DetectedPatterns.Add(pattern);
                         }
                     }
-					
                     else if (row.Value.ask >= askAbsorptionThreshold && row.Value.bid < bidAbsorptionThreshold)
                     {
                         var pattern = new DetectedPattern
@@ -320,6 +324,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
             this.indicator = indicator;
         }
 
+		#region Attach
+		
         public void Attach()
         {
             if (indicator.ChartControl == null) return;
@@ -329,6 +335,11 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
             CreateTooltipCanvas();
             indicator.ChartControl.MouseMove += ChartControl_MouseMove;
         }
+		
+		#endregion
+		
+		#region CreateTooltipCanvas
+		
         private void CreateTooltipCanvas()
         {
             try
@@ -348,7 +359,11 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                     indicator.Print($"Error creating canvas tooltip: {ex.Message}");
             }
         }
-
+		
+		#endregion
+		
+		#region CreateUIElementsOnUIThread
+		
         private void CreateUIElementsOnUIThread()
         {
             try
@@ -403,6 +418,11 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                     indicator.Print($"Error in CreateUIElementsOnUIThread: {ex.Message}");
             }
         }
+		
+		#endregion
+		
+		#region ApplyNinjaTraderStyling
+		
         private void ApplyNinjaTraderStyling()
         {
             try
@@ -423,6 +443,11 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                 ApplyFallbackStyling();
             }
         }
+		
+		#endregion
+		
+		#region ApplyStylingOnUIThread
+		
         private void ApplyStylingOnUIThread()
         {
             try
@@ -484,6 +509,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
             }
         }
 
+		#endregion
+		
+		#region TryGetThemeResource
+		
         private object TryGetThemeResource(FrameworkElement element, string resourceKey)
         {
             try
@@ -495,6 +524,11 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                 return null;
             }
         }
+		
+		#endregion
+		
+		#region ApplyFallbackStyling
+		
         private void ApplyFallbackStyling()
         {
             try
@@ -515,6 +549,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
             }
         }
 
+		#endregion
+		
+		#region ApplyFallbackStylingOnUIThread
+		
         private void ApplyFallbackStylingOnUIThread()
         {
             try
@@ -562,6 +600,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
             }
         }
 
+		#endregion
+		
+		#region Detach
+		
         public void Detach()
         {
             try
@@ -585,6 +627,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
             }
         }
 
+		#endregion
+		
+		#region ChartControl_MouseMove
+		
         private void ChartControl_MouseMove(object sender, MouseEventArgs e)
         {
             try
@@ -600,8 +646,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                 Point mouse = e.GetPosition(indicator.ChartControl);
                 bool patternFound = false;
 
-                foreach (var pattern in indicator.patternDetector.DetectedPatterns)
-                {
+				for(int i=0;i<indicator.patternDetector.DetectedPatterns.Count;i++)
+				{
+					var pattern = indicator.patternDetector.DetectedPatterns[i];
+					
                     if (pattern.BarIndex < indicator.ChartBars.FromIndex ||
                         pattern.BarIndex > indicator.ChartBars.ToIndex)
                         continue;
@@ -642,6 +690,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
             }
         }
 
+		#endregion
+		
+		#region ShowTooltip
+		
         private void ShowTooltip(string content, Point mousePosition)
         {
             try
@@ -669,6 +721,10 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
             }
         }
 
+		#endregion
+		
+		#region HideTooltip
+		
         private void HideTooltip()
         {
             try
@@ -686,6 +742,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
                     indicator.Print($"Error hiding tooltip: {ex.Message}");
             }
         }
+		
+		#endregion
     }
 	
 	#endregion
