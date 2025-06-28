@@ -34,7 +34,8 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 	
 	public static class BarDataGlobals
 	{
-		public static double tsv = 0.0;
+		public static double tickSize = 0.0;
+		public static int tickAggregation = 1;
 	}
 	
 	#endregion
@@ -154,32 +155,38 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 
 			public void addAsk(double prc, double vol, bool showPrevProfile, bool showCurrProfile, bool showCustProfile)
 			{
-				AddVolumeCommon(prc, vol);
+				double aggregatedPrice = getAggregatedPrice(prc);
+				
+				AddVolumeCommon(aggregatedPrice, vol);
 				this.ask += vol;
 				this.dtc = this.ask - this.bid;
 				UpdateDeltaExtremes();
 
-				UpdateProfiles(prc, vol, showPrevProfile, showCurrProfile, showCustProfile, (profile, p, v) => profile.addAsk(p, v));
-				this.rowItems.GetOrAdd(prc, new RowItem()).addAsk(vol);
+				UpdateProfiles(aggregatedPrice, vol, showPrevProfile, showCurrProfile, showCustProfile, (profile, p, v) => profile.addAsk(p, v));
+				this.rowItems.GetOrAdd(aggregatedPrice, new RowItem()).addAsk(vol);
 			}
 
 			public void addBid(double prc, double vol, bool showPrevProfile, bool showCurrProfile, bool showCustProfile)
 			{
-				AddVolumeCommon(prc, vol);
+				double aggregatedPrice = getAggregatedPrice(prc);
+				
+				AddVolumeCommon(aggregatedPrice, vol);
 				this.bid += vol;
 				this.dtc = this.ask - this.bid;
 				UpdateDeltaExtremes();
 
-				UpdateProfiles(prc, vol, showPrevProfile, showCurrProfile, showCustProfile, (profile, p, v) => profile.addBid(p, v));
-				this.rowItems.GetOrAdd(prc, new RowItem()).addBid(vol);
+				UpdateProfiles(aggregatedPrice, vol, showPrevProfile, showCurrProfile, showCustProfile, (profile, p, v) => profile.addBid(p, v));
+				this.rowItems.GetOrAdd(aggregatedPrice, new RowItem()).addBid(vol);
 			}
 
 			public void addVol(double prc, double vol, bool showPrevProfile, bool showCurrProfile, bool showCustProfile)
 			{
-				AddVolumeCommon(prc, vol);
+				double aggregatedPrice = getAggregatedPrice(prc);
+				
+				AddVolumeCommon(aggregatedPrice, vol);
 
-				UpdateProfiles(prc, vol, showPrevProfile, showCurrProfile, showCustProfile, (profile, p, v) => profile.addVol(p, v));
-				this.rowItems.GetOrAdd(prc, new RowItem()).addVol(vol);
+				UpdateProfiles(aggregatedPrice, vol, showPrevProfile, showCurrProfile, showCustProfile, (profile, p, v) => profile.addVol(p, v));
+				this.rowItems.GetOrAdd(aggregatedPrice, new RowItem()).addVol(vol);
 			}
 
 			private void AddVolumeCommon(double prc, double vol)
@@ -271,18 +278,18 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 						{
 							if ((upperP >= maxPrc && lowerP <= minPrc) || iteCnt++ >= MaxValueAreaIterations) break;
 	
-							upperV = (upperP < maxPrc) ? getVolume(upperP + BarDataGlobals.tsv) : -1.0;
-							lowerV = (lowerP > minPrc) ? getVolume(lowerP - BarDataGlobals.tsv) : -1.0;
+							upperV = (upperP < maxPrc) ? getVolume(upperP + BarDataGlobals.tickSize * BarDataGlobals.tickAggregation) : -1.0;
+							lowerV = (lowerP > minPrc) ? getVolume(lowerP - BarDataGlobals.tickSize * BarDataGlobals.tickAggregation) : -1.0;
 	
 							if (upperV > lowerV)
 							{
-								vah = upperP + BarDataGlobals.tsv;
+								vah = upperP + BarDataGlobals.tickSize * BarDataGlobals.tickAggregation;
 								tmpVol += upperV;
 								upperP = vah;
 							}
 							else
 							{
-								val = lowerP - BarDataGlobals.tsv;
+								val = lowerP - BarDataGlobals.tickSize * BarDataGlobals.tickAggregation;
 								tmpVol += lowerV;
 								lowerP = val;
 							}
@@ -337,6 +344,15 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				double imbRat = (bidVol - askVol) / (bidVol + askVol);
 
 				return (bidPrc < this.max && bidVol >= minVol && imbRat >= minImbalanceRatio);
+			}
+			
+			public double getAggregatedPrice(double price)
+			{
+			    if (BarDataGlobals.tickAggregation <= 1)
+			        return price;
+			        
+			    double aggregationSize = BarDataGlobals.tickSize * BarDataGlobals.tickAggregation;
+			    return Math.Floor(price / aggregationSize) * aggregationSize;
 			}
 		}
 		
@@ -458,18 +474,18 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 					{
 						if ((upperP >= maxPrc && lowerP <= minPrc) || iteCnt++ >= MaxValueAreaIterations) break;
 
-						upperV = (upperP < maxPrc) ? getVolume(upperP + BarDataGlobals.tsv) : -1.0;
-						lowerV = (lowerP > minPrc) ? getVolume(lowerP - BarDataGlobals.tsv) : -1.0;
+						upperV = (upperP < maxPrc) ? getVolume(upperP + BarDataGlobals.tickSize * BarDataGlobals.tickAggregation) : -1.0;
+						lowerV = (lowerP > minPrc) ? getVolume(lowerP - BarDataGlobals.tickSize * BarDataGlobals.tickAggregation) : -1.0;
 
 						if (upperV > lowerV)
 						{
-							vah = upperP + BarDataGlobals.tsv;
+							vah = upperP + BarDataGlobals.tickSize * BarDataGlobals.tickAggregation;
 							tmpVol += upperV;
 							upperP = vah;
 						}
 						else
 						{
-							val = lowerP - BarDataGlobals.tsv;
+							val = lowerP - BarDataGlobals.tickSize * BarDataGlobals.tickAggregation;
 							tmpVol += lowerV;
 							lowerP = val;
 						}
@@ -601,6 +617,9 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 				MaximumBarsLookBack = MaximumBarsLookBack.Infinite;
 
 				// ---
+				
+				tickAggregation = 1;
+				
 				calcPrevProfile = true;
 				calcCurrProfile = true;
 				calcCustProfile = true;
@@ -617,10 +636,13 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 			else if (State == State.DataLoaded)
 			{
 				barItems = new Series<BarItem>(BarsArray[0], MaximumBarsLookBack);
-				BarDataGlobals.tsv = TickSize;
+				BarDataGlobals.tickSize = TickSize;
+				BarDataGlobals.tickAggregation = tickAggregation;
 
 				if (log)
+				{
 					ClearOutputWindow();
+				}
 			}
 			else if(State == State.Terminated)
 			{
@@ -1019,15 +1041,20 @@ namespace NinjaTrader.NinjaScript.Indicators.Infinity
 		public Series<BarItem> BarItems => barItems;
 
 		[NinjaScriptProperty]
-		[Display(Name = "Calculate Previous Profile", GroupName = "Properties", Order = 0)]
+		[Range(1, 10)]
+		[Display(Name = "Aggregate Ticks", GroupName = "Properties", Order = 0)]
+		public int tickAggregation { get; set; }
+		
+		[NinjaScriptProperty]
+		[Display(Name = "Calculate Previous Profile", GroupName = "Properties", Order = 1)]
 		public bool calcPrevProfile { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name = "Calculate Current Profile", GroupName = "Properties", Order = 1)]
+		[Display(Name = "Calculate Current Profile", GroupName = "Properties", Order = 2)]
 		public bool calcCurrProfile { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name = "Calculate Custom Profile", GroupName = "Properties", Order = 2)]
+		[Display(Name = "Calculate Custom Profile", GroupName = "Properties", Order = 3)]
 		public bool calcCustProfile { get; set; }
 
 		[NinjaScriptProperty]
@@ -1061,18 +1088,18 @@ namespace NinjaTrader.NinjaScript.Indicators
 	public partial class Indicator : NinjaTrader.Gui.NinjaScript.IndicatorRenderBase
 	{
 		private Infinity.BarData[] cacheBarData;
-		public Infinity.BarData BarData(bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
+		public Infinity.BarData BarData(int tickAggregation, bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
 		{
-			return BarData(Input, calcPrevProfile, calcCurrProfile, calcCustProfile, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue);
+			return BarData(Input, tickAggregation, calcPrevProfile, calcCurrProfile, calcCustProfile, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue);
 		}
 
-		public Infinity.BarData BarData(ISeries<double> input, bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
+		public Infinity.BarData BarData(ISeries<double> input, int tickAggregation, bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
 		{
 			if (cacheBarData != null)
 				for (int idx = 0; idx < cacheBarData.Length; idx++)
-					if (cacheBarData[idx] != null && cacheBarData[idx].calcPrevProfile == calcPrevProfile && cacheBarData[idx].calcCurrProfile == calcCurrProfile && cacheBarData[idx].calcCustProfile == calcCustProfile && cacheBarData[idx].custProfilePctValue == custProfilePctValue && cacheBarData[idx].custProfileBarValue == custProfileBarValue && cacheBarData[idx].custProfileVolValue == custProfileVolValue && cacheBarData[idx].custProfileRngValue == custProfileRngValue && cacheBarData[idx].EqualsInput(input))
+					if (cacheBarData[idx] != null && cacheBarData[idx].tickAggregation == tickAggregation && cacheBarData[idx].calcPrevProfile == calcPrevProfile && cacheBarData[idx].calcCurrProfile == calcCurrProfile && cacheBarData[idx].calcCustProfile == calcCustProfile && cacheBarData[idx].custProfilePctValue == custProfilePctValue && cacheBarData[idx].custProfileBarValue == custProfileBarValue && cacheBarData[idx].custProfileVolValue == custProfileVolValue && cacheBarData[idx].custProfileRngValue == custProfileRngValue && cacheBarData[idx].EqualsInput(input))
 						return cacheBarData[idx];
-			return CacheIndicator<Infinity.BarData>(new Infinity.BarData(){ calcPrevProfile = calcPrevProfile, calcCurrProfile = calcCurrProfile, calcCustProfile = calcCustProfile, custProfilePctValue = custProfilePctValue, custProfileBarValue = custProfileBarValue, custProfileVolValue = custProfileVolValue, custProfileRngValue = custProfileRngValue }, input, ref cacheBarData);
+			return CacheIndicator<Infinity.BarData>(new Infinity.BarData(){ tickAggregation = tickAggregation, calcPrevProfile = calcPrevProfile, calcCurrProfile = calcCurrProfile, calcCustProfile = calcCustProfile, custProfilePctValue = custProfilePctValue, custProfileBarValue = custProfileBarValue, custProfileVolValue = custProfileVolValue, custProfileRngValue = custProfileRngValue }, input, ref cacheBarData);
 		}
 	}
 }
@@ -1081,14 +1108,14 @@ namespace NinjaTrader.NinjaScript.MarketAnalyzerColumns
 {
 	public partial class MarketAnalyzerColumn : MarketAnalyzerColumnBase
 	{
-		public Indicators.Infinity.BarData BarData(bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
+		public Indicators.Infinity.BarData BarData(int tickAggregation, bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
 		{
-			return indicator.BarData(Input, calcPrevProfile, calcCurrProfile, calcCustProfile, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue);
+			return indicator.BarData(Input, tickAggregation, calcPrevProfile, calcCurrProfile, calcCustProfile, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue);
 		}
 
-		public Indicators.Infinity.BarData BarData(ISeries<double> input , bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
+		public Indicators.Infinity.BarData BarData(ISeries<double> input , int tickAggregation, bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
 		{
-			return indicator.BarData(input, calcPrevProfile, calcCurrProfile, calcCustProfile, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue);
+			return indicator.BarData(input, tickAggregation, calcPrevProfile, calcCurrProfile, calcCustProfile, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue);
 		}
 	}
 }
@@ -1097,14 +1124,14 @@ namespace NinjaTrader.NinjaScript.Strategies
 {
 	public partial class Strategy : NinjaTrader.Gui.NinjaScript.StrategyRenderBase
 	{
-		public Indicators.Infinity.BarData BarData(bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
+		public Indicators.Infinity.BarData BarData(int tickAggregation, bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
 		{
-			return indicator.BarData(Input, calcPrevProfile, calcCurrProfile, calcCustProfile, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue);
+			return indicator.BarData(Input, tickAggregation, calcPrevProfile, calcCurrProfile, calcCustProfile, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue);
 		}
 
-		public Indicators.Infinity.BarData BarData(ISeries<double> input , bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
+		public Indicators.Infinity.BarData BarData(ISeries<double> input , int tickAggregation, bool calcPrevProfile, bool calcCurrProfile, bool calcCustProfile, double custProfilePctValue, int custProfileBarValue, double custProfileVolValue, double custProfileRngValue)
 		{
-			return indicator.BarData(input, calcPrevProfile, calcCurrProfile, calcCustProfile, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue);
+			return indicator.BarData(input, tickAggregation, calcPrevProfile, calcCurrProfile, calcCustProfile, custProfilePctValue, custProfileBarValue, custProfileVolValue, custProfileRngValue);
 		}
 	}
 }
